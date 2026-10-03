@@ -284,10 +284,18 @@ resolved.
 
 While wiring the restart test, `tips(actorId)` was found to return a branch's last event _regardless of
 which node it was about_, so a branch whose most recent event concerned another node would hide this
-node's open end. `tips(actorId, target?)` is now subject-aware, matching the per-subject resolution
-`history` already used. It is the same class of bug as the one fixed at the end of Phase 0, which
-suggests the _branch-versus-subject_ distinction is the subtlest thing in this model and deserves its own
-invariant test.
+node's open end. The `target` parameter was added, and subject-scoped resolution (`#lastOnBranchFor`) was
+introduced for branch-scoped _reads_.
+
+**Correction, found during Phase 2:** the `target` parameter was added to `tips()` but its body kept
+resolving the branch-global tip and only filtered the result afterwards, so `tips(actorId, target)`
+returned nothing whenever the branch had moved on to another subject. The commit message said "tips … are
+now per subject" and this report repeated it; the code did not do it. Phase 2's branch-versus-subject
+invariant test is what caught the discrepancy, and `tips()` now scans each branch for its most recent
+event about the requested subject.
+
+It is the same class of bug as the one above, which is why the distinction now has a dedicated test file
+rather than a paragraph in a report: documentation asserting a fix is not evidence that the fix exists.
 
 ---
 

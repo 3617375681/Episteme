@@ -557,11 +557,30 @@ export class EventLog implements CognitiveStateView {
    * a history or overview read. A branch that was forked from before recording anything of its own
    * has no open end, because its content lives on in the branch that forked from it.
    */
+  /**
+   * The open end of each in-scope branch, at most one event per branch.
+   *
+   * **Branch-global unless a subject is named**, and the difference is the whole point of this method:
+   *
+   * - `tips(actorId)` asks "where has this actor left off?" — one answer per branch, because a branch is a
+   *   line of inquiry and a line has one end.
+   * - `tips(actorId, target)` asks "where has this actor left off *on this node*?" — a different question,
+   *   answered by scanning each branch for its most recent event **about that subject**.
+   *
+   * The second is not the first plus a filter. A branch holds events for every node its actor reasoned
+   * about, so filtering the branch tip by target reports nothing whenever the branch's last event happened
+   * to concern another node — which is exactly the confusion this method's documentation and its behaviour
+   * disagreed about until an invariant test caught it.
+   *
+   * Branch-scoped *reads* already resolved this correctly through `#lastOnBranchFor`; this brings the
+   * querying helper into line with them rather than leaving two answers to one question.
+   */
   tips(actorId?: ActorId, target?: NodeId): readonly StateEvent[] {
     const tips: StateEvent[] = []
     for (const branch of this.#branches.values()) {
       if (actorId !== undefined && branch.actorId !== actorId) continue
-      const last = this.#tipOf(branch.id)
+      const last =
+        target === undefined ? this.#tipOf(branch.id) : this.#lastOnBranchFor(branch.id, target)
       if (last === undefined) continue
       const event = this.#events.get(last)
       if (event === undefined) continue
@@ -569,7 +588,10 @@ export class EventLog implements CognitiveStateView {
       if (target !== undefined && event.target !== target) continue
       tips.push(event)
     }
-    return tips
+    // Ordered by creation so the result is stable regardless of map iteration order.
+    return tips.sort(
+      (left, right) => left.createdAt - right.createdAt || (left.id < right.id ? -1 : 1),
+    )
   }
 
   get eventCount(): number {

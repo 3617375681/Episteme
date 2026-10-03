@@ -45,16 +45,32 @@ away from, and the fork would then be a no-op.
   on a branch that is not its ancestor. Callers do not have to remember to pass `lineage`.
 - **Reads are per subject.** A branch holds events for every node its actor has reasoned about, so
   "the tip of the branch" is not the same question as "the tip of this branch _for this node_".
-  `#resolveTips` and `tips()` resolve the branch's last event **for the requested target**; conflating
-  them made a branch-scoped read pick up another node's event and legitimately find nothing. When a
-  branch holds nothing for a subject, the read falls back to the point it forked from, so it reports
-  what was inherited rather than nothing at all.
-- `tips(actorId?, target?)` returns one open end per branch that holds an event for the subject. An
-  actor with two lines of inquiry has two open ends; a branch that was forked from before recording
-  anything of its own has none, because its content lives on in the branch that forked from it.
+  `#resolveTips` resolves the branch's last event **for the requested target**; conflating them made a
+  branch-scoped read pick up another node's event and legitimately find nothing. When a branch holds
+  nothing for a subject, the read falls back to the point it forked from, so it reports what was
+  inherited rather than nothing at all.
+- **`tips` answers two different questions, and they are not a filter apart.**
+
+  ```text
+  tips(actorId)          "where did this actor leave off?"        → one end per branch
+  tips(actorId, target)  "where did they leave off on this node?" → one end per branch, per subject
+  ```
+
+  The second is **not** the first with a target filter applied. Filtering the branch end by subject
+  reports nothing whenever the branch's most recent event happens to concern another node — which is the
+  opposite of the answer wanted, and precisely the confusion this ADR previously described as fixed when
+  only the parameter had been added. `tips(actorId, target)` therefore scans each in-scope branch for its
+  most recent event _about that subject_.
+
+  An actor with two lines of inquiry has two open ends; a subject that has not advanced on a branch keeps
+  its earlier event as that branch's end for that subject.
+
 - **Any** event may be a fork point. There is no "tip only" rule, and `fork` refuses only an event
   belonging to another actor, because continuing someone else's line would silently adopt their
   reasoning as your own.
+- **`fork` moves the actor onto the new branch.** The next `commit` continues the fork rather than the
+  branch it was cut from, which is what makes a fork a change of direction rather than a second
+  annotation. A caller wanting to advance the original line has to fork back to it explicitly.
 
 ## Alternatives
 
