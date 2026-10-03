@@ -1,4 +1,4 @@
-# 0004 — Storage and identity seams
+# 0003 — Storage abstraction
 
 ## Context
 

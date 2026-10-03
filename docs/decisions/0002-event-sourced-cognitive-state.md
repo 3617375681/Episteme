@@ -1,4 +1,4 @@
-# 0002 — Event-sourced cognition
+# 0002 — Event-sourced cognitive state
 
 ## Context
 

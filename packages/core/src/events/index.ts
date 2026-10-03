@@ -254,9 +254,7 @@ export class EventLog implements CognitiveStateView {
     const tips = this.#resolveTips(query)
     const collected: StateEvent[] = []
     const seen = new Set<EventId>()
-    // Computed once rather than walked per event: "which branches can this line see" is a
-    // property of the branch, not of each event encountered while reading it.
-    const lineage = query.lineage === undefined ? undefined : this.branchAncestry(query.lineage)
+    const lineage = this.#lineageOf(query)
 
     for (const tip of tips) {
       let cursor: EventId | undefined = tip
@@ -317,12 +315,16 @@ export class EventLog implements CognitiveStateView {
   /**
    * History for a fold: one branch's lineage if named, otherwise every open end.
    *
-   * A named branch is read as an explicit stitch of its ancestry, because "what did I
-   * understand on this line" is not a single backward walk from one tip:
+   * A named branch is read as a stitch of its ancestry, because "what did I understand on this
+   * line" is not a single backward walk from one tip:
    *
-   * - every ancestor branch contributes the prefix ending at the point this line forked from
-   *   it, so changes made afterwards on the original line are *not* inherited;
-   * - the branch itself contributes everything it has recorded.
+   * - every ancestor branch contributes the prefix ending at the point the next branch down the
+   *   chain forked from it, so changes made afterwards on the original line are *not* inherited;
+   * - the branch itself contributes everything it has recorded for this subject.
+   *
+   * `branchId` is passed through rather than `from`, so the recursion resolves each branch's tip
+   * for *this subject* — a branch holds events for every node its actor reasoned about, and the
+   * wrong tip would make an ancestor segment silently disappear.
    */
   #historyOf(
     target: NodeId,
@@ -335,10 +337,8 @@ export class EventLog implements CognitiveStateView {
     const segments: StateEvent[][] = []
 
     for (const [index, branch] of chain.entries()) {
-      const isLeaf = index === chain.length - 1
       const next: BranchId | undefined = chain[index + 1]
-      const forkPoint =
-        isLeaf || next === undefined ? undefined : this.#branches.get(next)?.forkPoint
+      const forkPoint = next === undefined ? undefined : this.#branches.get(next)?.forkPoint
       segments.push([
         ...this.history({
           target,
@@ -423,22 +423,27 @@ export class EventLog implements CognitiveStateView {
   /**
    * The open ends of the actor's lines of inquiry.
    *
-   * One per branch that holds at least one event: a branch is a line of inquiry, and its last
-   * event is where that line currently stands. A branch that was forked from before it recorded
-   * anything of its own has no open end — its content lives on in the branch that forked from
-   * it — which is what keeps a forked actor from appearing to hold two current beliefs.
+   * One per branch that holds at least one event *for the requested subject*: a branch is a line
+   * of inquiry, and its last event on this subject is where that line currently stands. Without
+   * the subject check, a branch whose most recent event belongs to a different node would be
+   * reported as an open end of *this* node, and a branch-scoped read would then resolve to that
+   * other event and legitimately — but confusingly — find nothing.
    *
-   * A retracted event is skipped for the same reason: it no longer states anything, so it must
-   * not be offered as a place to continue from.
+   * A branch that was forked from before recording anything of its own has no open end, because
+   * its content lives on in the branch that forked from it.
    */
-  tips(actorId?: ActorId): readonly StateEvent[] {
+  tips(actorId?: ActorId, target?: NodeId): readonly StateEvent[] {
     const tips: StateEvent[] = []
     for (const branch of this.#branches.values()) {
       if (actorId !== undefined && branch.actorId !== actorId) continue
-      const tipId = this.#tipOf(branch.id)
-      if (tipId === undefined || this.#revocations.has(tipId)) continue
-      const event = this.#events.get(tipId)
-      if (event !== undefined) tips.push(event)
+      const events = this.#branchEvents.get(branch.id) ?? []
+      const last = events[events.length - 1]
+      if (last === undefined) continue
+      const event = this.#events.get(last)
+      if (event === undefined) continue
+      if (this.#revocations.has(event.id)) continue
+      if (target !== undefined && event.target !== target) continue
+      tips.push(event)
     }
     return tips
   }
@@ -513,14 +518,47 @@ export class EventLog implements CognitiveStateView {
     return false
   }
 
+  /**
+   * The branches whose events a query may see.
+   *
+   * Naming a `branchId` is enough on its own: reading one line of inquiry must never include
+   * events recorded on a branch that is not its ancestor, or a fork would inherit exactly the
+   * change it forked to escape. `lineage` remains as an explicit override.
+   */
+  #lineageOf(query: HistoryQuery): readonly BranchId[] | undefined {
+    const scope = query.lineage ?? query.branchId
+    return scope === undefined ? undefined : this.branchAncestry(scope)
+  }
+
   #resolveTips(query: HistoryQuery): readonly EventId[] {
     if (query.from !== undefined) return [this.#requireEvent(query.from).id]
     if (query.branchId !== undefined) {
-      const tip = this.#tipOf(query.branchId)
-      return tip === undefined ? [] : [tip]
+      const tip = this.#lastOnBranchFor(query.branchId, query.target)
+      if (tip !== undefined) return [tip]
+      // The branch has not touched this subject. Fall back to the point it forked from, so the
+      // read reports what was inherited rather than nothing at all.
+      const forkPoint = this.#branches.get(query.branchId)?.forkPoint
+      return forkPoint === undefined ? [] : [forkPoint]
     }
     // Copied: a caller must never be able to mutate the log through a returned array.
     return [...this.#openEndsOf(subjectKey(query.target, query.actorId))]
+  }
+
+  /**
+   * The most recent event a branch holds for one subject.
+   *
+   * A branch carries events for every node its actor has reasoned about, so "the tip of the
+   * branch" is not the same question as "the tip of this branch *for this node*". Conflating
+   * them makes a branch-scoped read resolve to another subject's event and then legitimately —
+   * but uselessly — find nothing.
+   */
+  #lastOnBranchFor(branchId: BranchId, target: NodeId): EventId | undefined {
+    const events = this.#branchEvents.get(branchId) ?? []
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const id = events[index]
+      if (id !== undefined && this.#events.get(id)?.target === target) return id
+    }
+    return undefined
   }
 
   /**

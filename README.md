@@ -37,10 +37,10 @@ Phase 0. The whole point of v0 is to verify exactly one thing:
 > Can the system remember how one person's understanding changed, and let that change actually
 > affect the next interaction?
 
-Running `pnpm demo` completes that loop end to end — a question, a claim, a state change, a
-fork, and a later answer that differs _because_ of what was stored — with no database, no
-language model and no frontend. Everything else is deferred on purpose; see
-[What v0 does not do](#what-v0-does-not-do).
+Running `pnpm demo` completes that loop end to end — a question, a claim, a refinement, a retraction,
+a fork back to the _earlier_ understanding, retrieval, and a later answer that differs _because_ of
+what was stored — with no database, no language model and no frontend. Everything else is deferred on
+purpose; see [What v0 does not do](#what-v0-does-not-do).
 
 ## Quick start
 
@@ -141,10 +141,14 @@ opt-in.
 ## Documentation
 
 - [Architecture overview](docs/architecture/overview.md)
+- [Data model](docs/architecture/data-model.md)
+- [State events](docs/architecture/state-events.md)
+- [Projection](docs/architecture/projection.md)
 - [ADR 0001 — The Core boundary](docs/decisions/0001-core-boundary.md)
-- [ADR 0002 — Event-sourced cognition](docs/decisions/0002-event-sourced-cognition.md)
-- [ADR 0003 — Fork semantics](docs/decisions/0003-fork-semantics.md)
-- [ADR 0004 — Storage and identity seams](docs/decisions/0004-storage-and-identity-seams.md)
+- [ADR 0002 — Event-sourced cognitive state](docs/decisions/0002-event-sourced-cognitive-state.md)
+- [ADR 0003 — Storage abstraction](docs/decisions/0003-storage-abstraction.md)
+- [ADR 0004 — Domain extension boundary](docs/decisions/0004-domain-extension-boundary.md)
+- [ADR 0005 — Fork lineage](docs/decisions/0005-fork-lineage.md)
 
 ## What v0 does not do
 

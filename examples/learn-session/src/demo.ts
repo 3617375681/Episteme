@@ -449,6 +449,12 @@ export async function runDemo(): Promise<DemoResult> {
     actorId: humanId,
     branchId: log.defaultBranchId,
   })
+  const originalLineAll = log.history({
+    target: CLAIM_INDEX,
+    actorId: humanId,
+    branchId: log.defaultBranchId,
+    includeRevoked: true,
+  })
   const forkedLine = log.history({
     target: CLAIM_INDEX,
     actorId: humanId,
@@ -461,7 +467,8 @@ export async function runDemo(): Promise<DemoResult> {
       `with state:    ${after.response.text}`,
       `identical response? ${before.response.text === after.response.text}`,
       `Next exploration opened: ${QUESTION_RELATIVE}`,
-      `The original line keeps ${originalLine.length} change(s); the forked line keeps ${forkedLine.length}.`,
+      `Original line: ${originalLine.length} of ${originalLineAll.length} event(s) visible for this claim — the retracted one still exists.`,
+      `Forked line: ${forkedLine.length} event(s) for this claim.`,
       `Open lines of inquiry: ${log.tips(humanId).length}`,
       'Same question, same agent, same code — the input differed because the graph remembered.',
     ],

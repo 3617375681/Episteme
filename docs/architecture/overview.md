@@ -45,13 +45,16 @@ ranking or teaching. It runs and is tested with no frontend, no model and no dat
 packages/core/src/
 ├── ontology/      ids, primitives (time, provenance), actor, resources, state, tags
 ├── graph/         definitions, registries, the graph facade
-├── state/         (state dimensions live in the registry; reduction lives in events)
 ├── events/        the append-only, branchable event log (Engram)
 ├── guards/        the single authoritative validation path
 ├── projection/    project(): one graph, many views
+├── retrieval/     retrieve(): finding the part of the graph relevant right now
 ├── storage/       the storage port Core depends on
 └── errors.ts      the error taxonomy
 ```
+
+Further reading: [data-model.md](data-model.md), [state-events.md](state-events.md),
+[projection.md](projection.md) (which also covers retrieval).
 
 ### Domain Extensions
 
@@ -117,9 +120,10 @@ The event-sourced record of changing understanding, and the only place two invar
 2. **Nothing is overwritten.** There is no update and no delete. A change of mind is a new
    event; a change of direction is a new branch.
 
-`commit`, `fork`, `history`, `reduce`, `stateOf`, `tips` and `branchAncestry` are the whole
-surface. See [ADR 0002](../decisions/0002-event-sourced-cognition.md) and
-[ADR 0003](../decisions/0003-fork-semantics.md) for the model's details.
+`commit`, `fork`, `history`, `reduce`, `stateOf`, `revokeStateEvent`, `tips` and `branchAncestry` are
+the whole surface. See [ADR 0002](../decisions/0002-event-sourced-cognitive-state.md) and
+[ADR 0005](../decisions/0005-fork-lineage.md) for the model's details, and
+[state-events.md](state-events.md) for how to work with it.
 
 ### Guards
 
@@ -148,19 +152,37 @@ Two details matter. **State matching uses each dimension's current value**, neve
 one, so "confidently held" means now. And **edges are kept only when both endpoints survive**,
 because a dangling edge would imply knowledge the view cannot show.
 
+`nodeTypes`, `state` and `timeRange` gate the result, while `scene`, `tags` and `authoredBy`
+select seed nodes; `depth` expands by traversal, which is deliberately _not_ restricted by
+`nodeTypes` so a claim-only view can still walk through the concepts it refers to. Full detail in
+[projection.md](projection.md).
+
+### Retrieval
+
+`retrieve(graph, query)` finds the part of the graph relevant to a piece of text, by terms, tags,
+explicit anchors and neighbourhood, with no embeddings and no model. `matches` and `neighbors` are
+reported separately and each match carries the `matchedTerms` that caused it, so a result can be
+justified rather than merely asserted.
+
+It is deterministic on purpose: the same question over the same graph returns the same thing in the
+same order, which is what lets the critical loop be _asserted_ in a test. `depth` is what lets a
+question about RoPE surface the claim RoPE was built to answer even though the question never names
+it. The Learn pack wraps this as `retrieveRelevantContext`, which joins the structural result to one
+actor's understanding — see [projection.md](projection.md).
+
 ## Data flow of one interaction
 
 ```text
 human asks a question
         │
         ▼
-project(graph, { scene, topic, actor })   ──▶  a view of the relevant subgraph
+retrieve(graph, { text, actor })          ──▶  the relevant part of the graph
         │
         ▼
-reduce(history[actor, target])            ──▶  what this actor currently understands
+stateOf(target, actor[, branchId])        ──▶  what this actor currently understands
         │
         ▼
-CognitiveAgent.suggest*(workspace)        ──▶  suggestions, all status: "suggested"
+CognitiveAgent.respond(input, context)    ──▶  an answer conditioned on that
         │
         ▼
 human accepts / modifies / ignores
@@ -187,13 +209,13 @@ v0 (`tests/northstar.test.ts`):
 - **Test C** — Can it make today's answer different _because_ of how I understood before?
 
 If any of these is not a clear yes, the answer is to stop adding features rather than add more
-of them. Around them sit focused suites for append-only history, fork ancestry, state reduction,
-projection isolation, guard rejection and actor-state isolation.
+of them. Around them sit focused suites for append-only history, fork lineage, state reduction,
+retraction and query, projection isolation, guard rejection, retrieval, and actor-state isolation.
 
-The mock agent exists for Test C: it answers from the workspace it is handed, so the test can
-hold the agent fixed and vary only the history. A real model would make "the response changed
-because of the stored understanding" impossible to verify, since it might have given the same
-answer anyway.
+The mock agent exists for Test C: it answers from the context it is handed, so the test can hold the
+agent and the code fixed and vary only the history. A real model would make "the response changed
+because of the stored understanding" impossible to verify, since it might have given the same answer
+anyway. `tests/critical-loop.test.ts` is that proof; it is the test to keep green above all others.
 
 ## Known limitations
 
@@ -201,10 +223,15 @@ answer anyway.
 - No access-control enforcement yet: the privacy default is expressed in the model (`Actor.shareByDefault`,
   per-actor state) but not enforced by a policy layer.
 - No identity/authentication layer; actor ids are supplied by the caller.
-- `history()` returns events chronologically by commit time, merging every open end of the
-  actor's paths. That is the right input for `reduce` and for a view, but it is not a single
-  linear narrative; a caller that needs one path must pass `from` or `branchId`.
-- Projection is a full scan with in-memory adjacency. Adequate for v0 graphs, and the storage port
-  is where an index would go.
+- **Retrieval is lexical.** A question phrased with different words will miss the understanding that
+  answers it. An embedding adapter is the intended fix, behind the same interface.
+- Reads are per line of inquiry once an actor has forked, so "what do I currently understand" is only
+  well defined relative to a branch. An application must name the actor's current branch.
+- `history()` returns events chronologically by commit time. That is the right input for `reduce` and
+  for a view, but it is not a single linear narrative; a caller that needs one path must pass
+  `branchId`.
+- Projection and retrieval are full scans with in-memory adjacency. Adequate for v0 graphs, and the
+  storage port is where an index would go.
+- Nothing records which retrieved context actually helped, so there is no relevance feedback yet.
 - `packages/sdk`, `packages/domain-forum`, `packages/storage-local`, `packages/logic-bridge` and
   `apps/` are placeholders, not implementations.

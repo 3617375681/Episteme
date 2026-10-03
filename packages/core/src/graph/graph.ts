@@ -3,14 +3,7 @@ import type { Registries } from './registries.js'
 import type { GuardGraphView, GraphMutation } from '../guards/index.js'
 import { validateMutation } from '../guards/index.js'
 import { asId } from '../ontology/ids.js'
-import type {
-  ActorId,
-  BranchId,
-  EdgeId,
-  EdgeTypeId,
-  NodeId,
-  NodeTypeId,
-} from '../ontology/ids.js'
+import type { ActorId, BranchId, EdgeId, EdgeTypeId, NodeId, NodeTypeId } from '../ontology/ids.js'
 import type { Clock } from '../ontology/primitives.js'
 import type { Actor } from '../ontology/actor.js'
 import type {

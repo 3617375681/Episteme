@@ -1,4 +1,4 @@
-# 0003 — Fork semantics
+# 0005 — Fork lineage
 
 ## Context
 
