@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/storage-memory" },
+    { "path": "packages/domain-learn" },
+    { "path": "packages/agent" },
+    { "path": "examples/learn-session" },
+    { "path": "tests" }
+  ]
+}

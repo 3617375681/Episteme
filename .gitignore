@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# local secret material must never be committed
+*.local.json

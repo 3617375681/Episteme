@@ -1,0 +1,10 @@
+packages:
+  - 'packages/*'
+  - 'examples/*'
+  - 'tests'
+
+# pnpm blocks dependency build scripts by default. esbuild's postinstall fetches the
+# platform binary that Vitest needs, so it is the one allowance we make explicitly
+# instead of approving builds interactively.
+allowBuilds:
+  esbuild: true
