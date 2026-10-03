@@ -1,0 +1,25 @@
+{
+  "name": "@episteme/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cognitive agent interface plus a scripted mock. AI suggests; the human confirms.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@episteme/core": "workspace:*"
+  }
+}
