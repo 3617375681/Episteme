@@ -87,7 +87,7 @@ async function ask(
   display: string
   matchedNodeIds: string[]
 }> {
-  const retrieved = retrieveRelevantContext(context.graph, context.log, question, {
+  const retrieved = await retrieveRelevantContext(context.graph, context.log, question, {
     actorId,
     depth: 1,
   })

@@ -51,6 +51,24 @@ importers:
         specifier: workspace:*
         version: link:../../packages/storage-memory
 
+  examples/persistent-session:
+    dependencies:
+      '@episteme/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@episteme/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@episteme/domain-learn':
+        specifier: workspace:*
+        version: link:../../packages/domain-learn
+      '@episteme/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@episteme/storage-local':
+        specifier: workspace:*
+        version: link:../../packages/storage-local
+
   packages/agent:
     dependencies:
       '@episteme/core':
@@ -64,6 +82,18 @@ importers:
       '@episteme/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/sdk:
+    dependencies:
+      '@episteme/core':
+        specifier: workspace:*
+        version: link:../core
+      '@episteme/domain-learn':
+        specifier: workspace:*
+        version: link:../domain-learn
+      '@episteme/storage-memory':
+        specifier: workspace:*
+        version: link:../storage-memory
 
   packages/storage-local:
     dependencies:
@@ -88,6 +118,9 @@ importers:
       '@episteme/domain-learn':
         specifier: workspace:*
         version: link:../packages/domain-learn
+      '@episteme/sdk':
+        specifier: workspace:*
+        version: link:../packages/sdk
       '@episteme/storage-local':
         specifier: workspace:*
         version: link:../packages/storage-local

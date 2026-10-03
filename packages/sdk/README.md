@@ -1,39 +1,78 @@
-# @episteme/sdk — placeholder
+# @episteme/sdk
 
-Not implemented. This directory records the intended shape of the public surface; it contains no
-code and is not a workspace package yet.
+The composition surface: one place where storage, registries, graph and event log are wired together
+in the correct order.
 
-Today every consumer imports `@episteme/core` directly, including the `learn` pack, the memory
-adapter and the demo. That is fine while Core is the only publisher and there is one consumer of
-each seam. A separate SDK earns its place when one of these becomes true:
+## Why this exists
 
-- an Application needs a narrower, stable surface than Core's full ontology;
-- external code needs to build a domain pack without depending on Core's internals;
-- a convenience layer is wanted that should not live in Core (for example
-  "create a claim and record this state" as one call, or a scoped, actor-bound graph handle).
+Core deliberately exposes its parts separately — storage, registries, graph, event log — because each
+has to be replaceable and testable on its own. Every consumer then has to wire the four together, and
+**getting the order wrong is not a type error**:
 
-## What it must not become
+```text
+1. read the store            (what history exists?)
+2. build the graph           (over that storage)
+3. build the event log       (validating against that graph)
+4. wire the graph to the log (so state-filtered projections work)
+```
 
-A second way to do things Core already does. If the SDK grows its own mutation path, there would be
-two ways to write to the graph and the single-validation-path invariant would be broken. It should
-compose Core's public API, not reimplement or bypass it.
+A log built before the graph has loaded will reject writes that are perfectly legal, because every
+commit is validated against the graph. That mistake is easy to make once, and it was in fact made while
+building this package.
 
-## The likely first shape
+By Phase 1 the wiring existed twice — in `tests/fixtures.ts` and again in the persistent demo — which is
+the signal the placeholder README predicted for promoting it here.
 
-A thin composition layer:
+This is **not** a second way to use Core. It composes Core's public API and adds nothing Core already
+does: no mutation path of its own, no validation, no caching.
 
-- `createEpisteme({ storage, packs, clock, actorId })` returning a wired graph, event log and
-  registries in one call — replacing the constructor dance the tests and demo currently repeat;
-- an actor-bound handle so that `commit` does not need `actorId` passed at every call;
-- a projection helper that turns a `Projection` into the shape a view actually renders.
+## Usage
 
-Note that the fixture in `tests/fixtures.ts` already performs that wiring by hand. When a second
-consumer needs the same wiring, that duplication is the signal to promote it here.
+```ts
+import { agentActor, compose, humanActor, openEpisteme } from '@episteme/sdk'
+import { openLocalStorage } from '@episteme/storage-local'
+import { asId, type ActorId } from '@episteme/core'
 
-## Prerequisites before implementing
+// In memory — loses everything on exit.
+const ephemeral = compose({
+  actors: [humanActor(asId<ActorId>('actor_human'))],
+})
 
-- A second consumer that would otherwise duplicate Core wiring.
-- Clarity on whether the SDK is published or internal; that decides how much of Core it re-exports.
+// Durable — reads the file first, then composes over it.
+const storage = await openLocalStorage('graph.jsonl')
+const episteme = await openEpisteme(storage, {
+  actors: [humanActor(asId<ActorId>('actor_human')), agentActor(asId<ActorId>('actor_scaffold'))],
+})
 
-See the [architecture overview](../../docs/architecture/overview.md) and
-[ADR 0001](../../docs/decisions/0001-core-boundary.md).
+episteme.graph.addNode(/* ... */)
+episteme.log.commit(/* ... */)
+await episteme.persist() // hands the history to the store
+await storage.save() // writes the file, atomically
+```
+
+## API
+
+| Member                                                    | Purpose                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| `compose(options)`                                        | wires an instance over the storage you give it               |
+| `openEpisteme(store, options)`                            | reads the store first, then composes — the durable path      |
+| `composeDeterministic(startedAt, options)`                | the same, on a fixed clock, for reproducible demos and tests |
+| `humanActor(id, name, now)` / `agentActor(id, name, now)` | the two actor shapes, so callers do not invent them          |
+| `Episteme`                                                | `{ graph, log, registries, actorId, persist() }`             |
+
+## What it deliberately does not do
+
+- **No identity model.** A composition is about _knowledge_, not users. The caller registers the actors it
+  knows and names the human whose understanding is the subject; there is no authentication here and none
+  is implied.
+- **No policy.** Access control and the privacy default are expressed in the model
+  (`Actor.shareByDefault`, per-actor state) but enforced nowhere yet. This package does not pretend
+  otherwise.
+- **No mutation helpers.** Adding a node goes through `graph.addNode`, which goes through
+  `validateMutation`. A convenience method here that wrote directly would break the
+  single-validation-path invariant.
+
+## Note for contributors
+
+Vitest resolves `@episteme/*` through `dist/`, so run `pnpm typecheck` or `pnpm build` before `pnpm test`
+after editing this package — or simply use `pnpm test`, whose `pretest` does it for you.

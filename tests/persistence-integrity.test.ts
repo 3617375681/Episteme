@@ -228,7 +228,7 @@ describe('recovery integrity', () => {
     })
 
     const stateBefore = [...session1.log.stateOf(CLAIM_ID, session1.humanId).entries()]
-    const contextBefore = retrieveRelevantContext(session1.graph, session1.log, QUESTION, {
+    const contextBefore = await retrieveRelevantContext(session1.graph, session1.log, QUESTION, {
       actorId: session1.humanId,
       depth: 1,
     })
@@ -237,7 +237,7 @@ describe('recovery integrity', () => {
 
     const session2 = await openEpisteme(await openLocalStorage(filePath))
     const stateAfter = [...session2.log.stateOf(CLAIM_ID, session2.humanId).entries()]
-    const contextAfter = retrieveRelevantContext(session2.graph, session2.log, QUESTION, {
+    const contextAfter = await retrieveRelevantContext(session2.graph, session2.log, QUESTION, {
       actorId: session2.humanId,
       depth: 1,
     })

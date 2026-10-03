@@ -13,6 +13,7 @@
     { "path": "../packages/storage-memory" },
     { "path": "../packages/storage-local" },
     { "path": "../packages/domain-learn" },
-    { "path": "../packages/agent" }
+    { "path": "../packages/agent" },
+    { "path": "../packages/sdk" }
   ]
 }

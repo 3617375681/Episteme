@@ -1,0 +1,27 @@
+{
+  "name": "@episteme/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Composition surface: one place where storage, registries, graph and event log are wired in the correct order.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@episteme/core": "workspace:*",
+    "@episteme/domain-learn": "workspace:*",
+    "@episteme/storage-memory": "workspace:*"
+  }
+}

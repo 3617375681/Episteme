@@ -425,6 +425,7 @@ export {
 // ── Learner-level context retrieval ─────────────────────────────────────────
 export {
   retrieveRelevantContext,
+  retrieveWith,
   settledUnderstanding,
   hasOpenConflict,
   summarise,
@@ -432,4 +433,13 @@ export {
   learnerResponder,
   toAgentContext,
 } from './context.js'
-export type { RelevantContext, KnownUnderstanding } from './context.js'
+export type { RelevantContext, KnownUnderstanding, RetrieveContextOptions } from './context.js'
+
+// ── Retrieval strategy: the seam a different relevance model plugs into ─────
+export {
+  LexicalGraphRetriever,
+  EmbeddingRetriever,
+  lexicalRetriever,
+  bindRetriever,
+} from './retriever.js'
+export type { Retriever, RetrieveQuery, RankSignal } from './retriever.js'

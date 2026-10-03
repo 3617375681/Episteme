@@ -32,22 +32,33 @@ Future interaction changes
 
 ## Status
 
-Phase 0. The whole point of v0 is to verify exactly one thing:
+**Phase 1.** Understanding survives process restart. The Phase 0 loop is intact — a question, a claim, a
+refinement, a retraction, a fork back to the _earlier_ understanding, retrieval, and a later answer that
+differs _because_ of what was stored — and it now runs over durable local storage.
 
-> Can the system remember how one person's understanding changed, and let that change actually
-> affect the next interaction?
+```bash
+pnpm demo             # Phase 0: the cognitive loop, no persistence
+pnpm demo:persistent  # Phase 1: two sessions over one file, with a restart between them
+```
 
-Running `pnpm demo` completes that loop end to end — a question, a claim, a refinement, a retraction,
-a fork back to the _earlier_ understanding, retrieval, and a later answer that differs _because_ of
-what was stored — with no database, no language model and no frontend. Everything else is deferred on
-purpose; see [What v0 does not do](#what-v0-does-not-do).
+`pnpm demo:persistent` is the Phase 1 claim in one run:
+
+```text
+Session 1   the learner forms an understanding, records it, forks a second line, writes to disk, stops
+Session 2   a new instance over the same file reloads it, and answers differently
+            identical response? false
+```
+
+Both demos need no database, no language model and no frontend. Everything else is deferred on purpose;
+see [What v0 does not do](#what-v0-does-not-do).
 
 ## Quick start
 
 ```bash
 pnpm install
-pnpm check     # typecheck + lint + tests
-pnpm demo      # the v0 closed loop, printed as a narrative
+pnpm check              # typecheck + lint + tests
+pnpm demo               # the cognitive loop, printed as a narrative
+pnpm demo:persistent    # the same loop across a restart, over a real file
 ```
 
 ## Layout
@@ -55,17 +66,19 @@ pnpm demo      # the v0 closed loop, printed as a narrative
 ```text
 episteme/
 ├── packages/
-│   ├── core/               Episteme Core — ontology, graph, state, events, guards, projection
-│   ├── domain-learn/       Learn domain pack: vocabulary and rules for the Learn scene
-│   ├── storage-memory/     In-memory GraphStorageAdapter (the v0 backend)
+│   ├── core/               Episteme Core — ontology, graph, state, events, guards, projection, retrieval
+│   ├── domain-learn/       Learn domain pack: vocabulary, rules and the Retriever seam
+│   ├── storage-memory/     In-memory GraphStorageAdapter
+│   ├── storage-local/      Durable GraphStorageAdapter + event store (append-only JSONL)
+│   ├── sdk/                Composition: the one place the layers are wired in order
 │   ├── agent/              CognitiveAgent interface + scripted mock (no real model yet)
-│   ├── sdk/                [placeholder] public convenience surface
 │   ├── domain-forum/       [placeholder] Forum domain pack
-│   ├── storage-local/      [placeholder] durable local adapter
 │   └── logic-bridge/       [placeholder] optional formalisation (Lean, Datalog, SMT)
 ├── apps/                   [placeholder] application shells: learn, forum
-├── examples/learn-session/ Runnable v0 closed loop
-├── tests/                  Cross-package tests, including the three North Star questions
+├── examples/
+│   ├── learn-session/      Phase 0: the cognitive loop
+│   └── persistent-session/ Phase 1: the loop across a process restart
+├── tests/                  Cross-package tests, including the North Star and restart suites
 └── docs/                   architecture, concepts, decisions (ADRs), roadmap
 ```
 
@@ -144,11 +157,14 @@ opt-in.
 - [Data model](docs/architecture/data-model.md)
 - [State events](docs/architecture/state-events.md)
 - [Projection](docs/architecture/projection.md)
+- [Retrieval](docs/architecture/retrieval.md)
 - [ADR 0001 — The Core boundary](docs/decisions/0001-core-boundary.md)
 - [ADR 0002 — Event-sourced cognitive state](docs/decisions/0002-event-sourced-cognitive-state.md)
 - [ADR 0003 — Storage abstraction](docs/decisions/0003-storage-abstraction.md)
 - [ADR 0004 — Domain extension boundary](docs/decisions/0004-domain-extension-boundary.md)
 - [ADR 0005 — Fork lineage](docs/decisions/0005-fork-lineage.md)
+- [ADR 0006 — Persistence format](docs/decisions/0006-persistence-format.md)
+- [Phase 1 report](PHASE1_REPORT.md)
 
 ## What v0 does not do
 

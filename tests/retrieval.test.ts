@@ -1,5 +1,14 @@
 import { asId, retrieve, termsOf, type ActorId, type EdgeId, type NodeId } from '@episteme/core'
-import { DIMENSION, EDGE, NODE, learnTags, retrieveRelevantContext } from '@episteme/domain-learn'
+import {
+  DIMENSION,
+  EDGE,
+  NODE,
+  EmbeddingRetriever,
+  learnTags,
+  lexicalRetriever,
+  retrieveRelevantContext,
+  retrieveWith,
+} from '@episteme/domain-learn'
 import { describe, expect, it } from 'vitest'
 import { createFixture, dimensions, level, type EpistemeContext } from './fixtures.js'
 
@@ -147,7 +156,7 @@ describe('deterministic retrieval', () => {
 })
 
 describe('learner context retrieval', () => {
-  it('joins the graph to one actor\u2019s understanding, and only that actor\u2019s', () => {
+  it('joins the graph to one actor\u2019s understanding, and only that actor\u2019s', async () => {
     const context = createFixture()
     seed(context)
 
@@ -161,11 +170,11 @@ describe('learner context retrieval', () => {
       source: 'session:1',
     })
 
-    const forHuman = retrieveRelevantContext(context.graph, context.log, CLAIM_LABEL, {
+    const forHuman = await retrieveRelevantContext(context.graph, context.log, CLAIM_LABEL, {
       actorId: context.humanId,
       depth: 1,
     })
-    const forAgent = retrieveRelevantContext(context.graph, context.log, CLAIM_LABEL, {
+    const forAgent = await retrieveRelevantContext(context.graph, context.log, CLAIM_LABEL, {
       actorId: asId<ActorId>('actor_agent'),
       depth: 1,
     })
@@ -182,11 +191,11 @@ describe('learner context retrieval', () => {
     expect(forAgent.summary).toBe('')
   })
 
-  it('reports nothing recorded when the learner has no state, and never invents it', () => {
+  it('reports nothing recorded when the learner has no state, and never invents it', async () => {
     const context = createFixture()
     seed(context)
 
-    const empty = retrieveRelevantContext(context.graph, context.log, 'Why does RoPE work?', {
+    const empty = await retrieveRelevantContext(context.graph, context.log, 'Why does RoPE work?', {
       actorId: context.humanId,
       depth: 2,
     })
@@ -198,7 +207,7 @@ describe('learner context retrieval', () => {
     expect(empty.nodes.length).toBeGreaterThan(0)
   })
 
-  it('carries context to the agent as data, not as a sentence to re-parse', () => {
+  it('carries context to the agent as data, not as a sentence to re-parse', async () => {
     const context = createFixture()
     seed(context)
     context.log.commit({
@@ -207,12 +216,61 @@ describe('learner context retrieval', () => {
       dimensions: dimensions([DIMENSION.confidence, level('high')]),
     })
 
-    const retrieved = retrieveRelevantContext(context.graph, context.log, CLAIM_LABEL, {
+    const retrieved = await retrieveRelevantContext(context.graph, context.log, CLAIM_LABEL, {
       actorId: context.humanId,
       depth: 1,
     })
 
     expect(retrieved.terms.length).toBeGreaterThan(0)
     expect(retrieved.query.text).toBe(CLAIM_LABEL)
+  })
+
+  it('reaches retrieval through the Retriever seam without changing what it returns', async () => {
+    const context = createFixture()
+    seed(context)
+    context.log.commit({
+      target: asId<NodeId>('claim_order'),
+      actorId: context.humanId,
+      dimensions: dimensions([DIMENSION.confidence, level('high')]),
+    })
+
+    const retriever = lexicalRetriever(context.graph)
+    expect(retriever.name).toBe('lexical-graph')
+
+    const throughSeam = await retrieveWith(retriever, context.graph, context.log, CLAIM_LABEL, {
+      actorId: context.humanId,
+      depth: 1,
+    })
+    const throughEntryPoint = await retrieveRelevantContext(
+      context.graph,
+      context.log,
+      CLAIM_LABEL,
+      {
+        actorId: context.humanId,
+        depth: 1,
+      },
+    )
+
+    // Same strategy, so the same answer — the interface is a seam, not a behaviour change.
+    expect(throughSeam.nodes.map((node) => node.id)).toEqual(
+      throughEntryPoint.nodes.map((node) => node.id),
+    )
+    expect(throughSeam.summary).toBe(throughEntryPoint.summary)
+    // And the context says how it was obtained, so a view can be honest about it.
+    expect(throughSeam.retriever).toBe('lexical-graph')
+  })
+
+  it('refuses a retriever it cannot yet provide, rather than returning no context', async () => {
+    const context = createFixture()
+    seed(context)
+
+    // An empty result would read as "the learner understands nothing", which is a different claim.
+    await expect(
+      retrieveWith(new EmbeddingRetriever(), context.graph, context.log, CLAIM_LABEL, {
+        actorId: context.humanId,
+      }),
+    ).rejects.toThrow(/designed but not implemented/)
+
+    expect(new EmbeddingRetriever().name).toBe('embedding')
   })
 })

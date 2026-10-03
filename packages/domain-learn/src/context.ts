@@ -1,11 +1,13 @@
-import {
-  retrieve,
-  type ActorId,
-  type NodeId,
-  type RetrievalQuery,
-  type StateValue,
+import type {
+  ActorId,
+  CoreGraph,
+  EventLog,
+  GraphNode,
+  NodeId,
+  RetrievalQuery,
+  StateValue,
 } from '@episteme/core'
-import type { CoreGraph, EventLog, GraphNode } from '@episteme/core'
+import { LexicalGraphRetriever, type Retriever } from './retriever.js'
 
 /**
  * What the learner already understands, as far as this query is concerned.
@@ -44,6 +46,8 @@ export interface RelevantContext {
   /** One-line rendering, used by the demo and by the agent's own reasoning. */
   readonly summary: string
   readonly query: RetrievalQuery
+  /** Which retriever produced this, so a view can be honest about how it looked. */
+  readonly retriever: string
 }
 
 /**
@@ -57,6 +61,21 @@ const SETTLED_DIMENSIONS: Readonly<Record<string, readonly string[]>> = {
   articulation: ['medium', 'high'],
 }
 
+export interface RetrieveContextOptions {
+  readonly actorId?: ActorId
+  readonly tags?: readonly string[]
+  readonly nodeTypes?: RetrievalQuery['nodeTypes']
+  readonly depth?: number
+  readonly limit?: number
+  /**
+   * The strategy to use.
+   *
+   * Defaults to the deterministic lexical retriever. Passing another is how a different relevance
+   * model is adopted without any caller changing — see `Retriever` in `retriever.ts`.
+   */
+  readonly retriever?: Retriever
+}
+
 /**
  * Retrieves the cognitive context relevant to a question.
  *
@@ -65,39 +84,55 @@ const SETTLED_DIMENSIONS: Readonly<Record<string, readonly string[]>> = {
  * concept is shared; the understanding of it is not, so this function must never mix one
  * actor's state into another's context.
  *
- * Deterministic by construction — the same question over the same history always yields the
- * same context, which is what lets the critical loop be asserted in a test rather than
- * demonstrated by hand.
+ * Deterministic by construction when the default retriever is used — the same question over the same
+ * history always yields the same context, which is what lets the critical loop be asserted in a test
+ * rather than demonstrated by hand.
  */
 export function retrieveRelevantContext(
   graph: CoreGraph,
   log: EventLog,
   question: string,
-  options: {
-    readonly actorId?: ActorId
-    readonly tags?: readonly string[]
-    readonly nodeTypes?: RetrievalQuery['nodeTypes']
-    readonly depth?: number
-    readonly limit?: number
-  } = {},
-): RelevantContext {
-  const query: RetrievalQuery = {
+  options: RetrieveContextOptions = {},
+): Promise<RelevantContext> {
+  return retrieveWith(
+    options.retriever ?? new LexicalGraphRetriever(graph),
+    graph,
+    log,
+    question,
+    options,
+  )
+}
+
+/**
+ * Retrieves context through a named retriever.
+ *
+ * The one place the join happens, so every strategy — lexical now, semantic later — produces the same
+ * `RelevantContext` shape and inherits the same actor isolation.
+ */
+export async function retrieveWith(
+  retriever: Retriever,
+  graph: CoreGraph,
+  log: EventLog,
+  question: string,
+  options: RetrieveContextOptions = {},
+): Promise<RelevantContext> {
+  const result = await retriever.retrieve({
     text: question,
+    ...(options.actorId === undefined ? {} : { actorId: options.actorId }),
     ...(options.tags === undefined ? {} : { tags: options.tags }),
     ...(options.nodeTypes === undefined ? {} : { nodeTypes: options.nodeTypes }),
     depth: options.depth ?? 1,
     ...(options.limit === undefined ? {} : { limit: options.limit }),
-  }
+  })
 
-  const result = retrieve(graph, query)
-
+  const actorId = options.actorId
   const known: KnownUnderstanding[] = []
-  if (options.actorId !== undefined) {
+  if (actorId !== undefined) {
     for (const node of result.nodes) {
       // The node may already be gone from a later projection, so resolve it through the
       // graph rather than trusting the retrieval snapshot.
       const current = graph.getNode(node.id) ?? node
-      const state = log.stateOf(current.id, options.actorId)
+      const state = log.stateOf(current.id, actorId)
       if (state.size === 0) continue
 
       const record: Record<string, StateValue> = {}
@@ -128,12 +163,13 @@ export function retrieveRelevantContext(
 
   return Object.freeze({
     question,
-    actorId: options.actorId,
+    actorId,
     terms: result.terms,
     nodes: result.nodes,
     known: Object.freeze(known),
     summary: summarise(known),
-    query,
+    query: result.query,
+    retriever: retriever.name,
   })
 }
 

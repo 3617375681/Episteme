@@ -1,38 +1,35 @@
 import {
-  EventLog,
-  applyDomainPacks,
   asId,
   createFixedClock,
-  createGraph,
-  createRegistries,
   type Actor,
   type ActorId,
   type BranchId,
   type CoreGraph,
   type DimensionId,
-  type EventLogState,
+  type EventLog,
   type GraphStorageAdapter,
   type NodeId,
   type PersistentEventStore,
   type Registries,
   type StateValue,
 } from '@episteme/core'
-import { learnDomainPack, retrieveRelevantContext, toAgentContext } from '@episteme/domain-learn'
+import {
+  compose,
+  composeDeterministic,
+  openEpisteme as openViaSdk,
+  type Episteme,
+} from '@episteme/sdk'
+import { retrieveRelevantContext, toAgentContext } from '@episteme/domain-learn'
 import { MockCognitiveAgent, type AgentResponse } from '@episteme/agent'
-import { createMemoryStorage } from '@episteme/storage-memory'
 
 /**
- * A wired-up Episteme instance for tests and the demo.
+ * A wired-up Episteme instance for tests.
  *
- * One fixture for the whole repo so that every test exercises the same composition:
- * Core graph + one storage adapter + one domain pack + one event log. If the layers stop
- * fitting together, this fixture stops working rather than each test inventing its own
- * wiring.
+ * Composition now lives in `@episteme/sdk`, so this file is a thin adapter rather than a second
+ * implementation: if the layers stop fitting together, the SDK is what fails and the tests inherit it.
+ * The named actors are kept here because the existing suites address them by name.
  */
-export interface EpistemeContext {
-  readonly graph: CoreGraph
-  readonly log: EventLog
-  readonly registries: Registries
+export type EpistemeContext = Episteme & {
   readonly human: Actor
   readonly agent: Actor
   readonly humanId: ActorId
@@ -69,65 +66,29 @@ export function createActors(now: () => number): {
 }
 
 export function createFixture(startedAt = 0): EpistemeContext {
-  const registries = createRegistries()
-  applyDomainPacks([learnDomainPack], { registries })
-
-  const storage = createMemoryStorage()
-  const clock = createFixedClock(startedAt)
-  const { human, agent, humanId, agentId } = createActors(() => clock.now())
-
-  const graph = createGraph({ storage, registries, clock, actorId: humanId })
-  graph.registerActor(human)
-  graph.registerActor(agent)
-
-  const log = new EventLog({ registries, clock, graph, defaultActorId: humanId })
-  const wired = createGraph({ storage, registries, state: log, clock, actorId: humanId })
-  wired.registerActor(human)
-  wired.registerActor(agent)
-
-  return { graph: wired, log, registries, human, agent, humanId, agentId }
+  const { human, agent, humanId, agentId } = createActors(() => startedAt)
+  const episteme = composeDeterministic(startedAt, { actors: [human, agent], actorId: humanId })
+  return { ...episteme, human, agent, humanId, agentId }
 }
 
 /**
  * Composes an instance over a durable store.
  *
- * The order matters and mirrors `createFixture`: the store is read first, then the graph is built
- * over it, and only then is the event log created — because the log validates every commit against
- * the graph, and validating against a graph that had not loaded yet would reject writes that are
- * perfectly legal.
- *
- * The log receives the *unwired* graph, exactly as `createFixture` does: validation needs nodes and
- * edges, never state, and wiring state into the validating view would make the two views mutually
- * dependent.
+ * The ordering rule — read the store, then build the graph, then the event log — lives in the SDK,
+ * because getting it wrong is not a type error: a log validating against a graph that had not loaded
+ * would reject writes that are perfectly legal.
  */
 export async function openEpisteme(
   store: PersistentEventStore & GraphStorageAdapter,
   startedAt = 0,
 ): Promise<EpistemeContext> {
-  const registries = createRegistries()
-  applyDomainPacks([learnDomainPack], { registries })
-
-  const clock = createFixedClock(startedAt)
-  const { human, agent, humanId, agentId } = createActors(() => clock.now())
-  const initialState: EventLogState | undefined = await store.load()
-
-  const graph = createGraph({ storage: store, registries, clock, actorId: humanId })
-  graph.registerActor(human)
-  graph.registerActor(agent)
-
-  const log = new EventLog({
-    registries,
-    clock,
-    graph,
-    defaultActorId: humanId,
-    store,
-    ...(initialState === undefined ? {} : { initialState }),
+  const { human, agent, humanId, agentId } = createActors(() => startedAt)
+  const episteme = await openViaSdk(store, {
+    clock: createFixedClock(startedAt),
+    actors: [human, agent],
+    actorId: humanId,
   })
-  const wired = createGraph({ storage: store, registries, state: log, clock, actorId: humanId })
-  wired.registerActor(human)
-  wired.registerActor(agent)
-
-  return { graph: wired, log, registries, human, agent, humanId, agentId }
+  return { ...episteme, human, agent, humanId, agentId }
 }
 
 /** Builds a dimension map, requiring at least one entry so no empty event slips through. */
@@ -167,8 +128,8 @@ export interface RetrievedTurn {
 /**
  * One interaction: retrieve what this actor understands, then answer from it.
  *
- * Shared so that a restart test measures the *same* interaction before and after, rather than two
- * subtly different ones. Deterministic by construction, which is what makes "the answer differed"
+ * Shared so a restart test measures the *same* interaction before and after, rather than two subtly
+ * different ones. Deterministic by construction, which is what makes "the answer differed"
  * attributable to persisted memory.
  */
 export async function askIn(
@@ -178,7 +139,7 @@ export async function askIn(
   options: { readonly actorId?: ActorId; readonly depth?: number } = {},
 ): Promise<RetrievedTurn> {
   const actorId = options.actorId ?? context.humanId
-  const retrieved = retrieveRelevantContext(context.graph, context.log, question, {
+  const retrieved = await retrieveRelevantContext(context.graph, context.log, question, {
     actorId,
     depth: options.depth ?? 1,
   })
@@ -192,4 +153,5 @@ export async function askIn(
   }
 }
 
-export { MockCognitiveAgent }
+export { compose, MockCognitiveAgent }
+export type { CoreGraph, EventLog, Registries }

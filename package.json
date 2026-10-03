@@ -19,6 +19,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "demo": "pnpm --filter @episteme/example-learn-session demo",
+    "demo:persistent": "pnpm --filter @episteme/example-persistent-session demo",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

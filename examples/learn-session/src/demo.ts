@@ -215,7 +215,7 @@ export async function ask(
   question: string,
   options: { readonly topic?: string; readonly depth?: number } = {},
 ): Promise<{ response: AgentResponse; summary: string; retrieved: readonly string[] }> {
-  const retrieved = retrieveRelevantContext(world.graph, world.log, question, {
+  const retrieved = await retrieveRelevantContext(world.graph, world.log, question, {
     actorId: world.humanId,
     ...(options.topic === undefined ? {} : { tags: [`topic:${options.topic}`] }),
     depth: options.depth ?? 1,
