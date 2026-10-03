@@ -439,7 +439,19 @@ export type { RelevantContext, KnownUnderstanding, RetrieveContextOptions } from
 export {
   LexicalGraphRetriever,
   EmbeddingRetriever,
+  HybridRetriever,
+  DEFAULT_HYBRID_WEIGHTS,
   lexicalRetriever,
-  bindRetriever,
+  embeddingRetriever,
+  hybridRetriever,
+  textOfNode,
+  cognitiveValue,
 } from './retriever.js'
-export type { Retriever, RetrieveQuery, RankSignal } from './retriever.js'
+export type {
+  Retriever,
+  RetrieveQuery,
+  RankSignal,
+  HybridWeights,
+  SignalContribution,
+  ScoredCandidate,
+} from './retriever.js'

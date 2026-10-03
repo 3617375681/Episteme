@@ -1,9 +1,10 @@
 import { asId, retrieve, termsOf, type ActorId, type EdgeId, type NodeId } from '@episteme/core'
+import { DeterministicEmbeddingAdapter, InMemoryEmbeddingCache } from '@episteme/core'
 import {
   DIMENSION,
   EDGE,
   NODE,
-  EmbeddingRetriever,
+  embeddingRetriever,
   learnTags,
   lexicalRetriever,
   retrieveRelevantContext,
@@ -260,17 +261,31 @@ describe('learner context retrieval', () => {
     expect(throughSeam.retriever).toBe('lexical-graph')
   })
 
-  it('refuses a retriever it cannot yet provide, rather than returning no context', async () => {
+  it('reaches semantic retrieval through the seam and still joins actor state', async () => {
     const context = createFixture()
     seed(context)
+    context.log.commit({
+      target: asId<NodeId>('claim_order'),
+      actorId: context.humanId,
+      dimensions: dimensions([DIMENSION.confidence, level('high')]),
+    })
 
-    // An empty result would read as "the learner understands nothing", which is a different claim.
-    await expect(
-      retrieveWith(new EmbeddingRetriever(), context.graph, context.log, CLAIM_LABEL, {
-        actorId: context.humanId,
-      }),
-    ).rejects.toThrow(/designed but not implemented/)
+    const retriever = embeddingRetriever(
+      context.graph,
+      new DeterministicEmbeddingAdapter(),
+      new InMemoryEmbeddingCache(),
+    )
+    expect(retriever.name).toBe('embedding')
+    expect(retriever.signals).toEqual(['semantic'])
 
-    expect(new EmbeddingRetriever().name).toBe('embedding')
+    const retrieved = await retrieveWith(retriever, context.graph, context.log, CLAIM_LABEL, {
+      actorId: context.humanId,
+      depth: 1,
+    })
+
+    expect(retrieved.retriever).toBe('embedding')
+    expect(retrieved.nodes.length).toBeGreaterThan(0)
+    // Actor isolation is inherited from the join, not re-implemented per retriever.
+    expect(retrieved.known.length).toBeGreaterThan(0)
   })
 })

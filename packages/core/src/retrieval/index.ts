@@ -206,8 +206,13 @@ export function retrieve(
   })
 }
 
-/** Terms found in a node's label, tags and id. */
-function matchedTermsIn(node: GraphNode, terms: readonly string[]): readonly string[] {
+/**
+ * Terms found in a node's label, tags and id.
+ *
+ * Exported because lexical overlap is one relevance signal among several, and a hybrid retriever must
+ * measure it the same way the lexical one does. Two definitions of "does this match" would drift.
+ */
+export function matchedTermsIn(node: GraphNode, terms: readonly string[]): readonly string[] {
   if (terms.length === 0) return []
   const haystack = `${node.label} ${node.tags.join(' ')} ${node.id}`.toLowerCase()
   return terms.filter((term) => haystack.includes(term))

@@ -154,8 +154,28 @@ export { project, selectSeeds, dimensionsOf, toSubGraph } from './projection/ind
 export type { Projection, ProjectionFilter } from './projection/index.js'
 
 // ── Retrieval: getting previous understanding back ───────────────────────────
-export { retrieve, termsOf } from './retrieval/index.js'
+export { retrieve, termsOf, matchedTermsIn } from './retrieval/index.js'
 export type { RetrievalQuery, RetrievalResult, RetrievedNode } from './retrieval/index.js'
+
+// ── Embedding port: semantics behind an adapter, never a Core dependency ─────
+export { EmbeddingError, embeddingKeyFor } from './embedding/index.js'
+export type {
+  EmbeddingAdapter,
+  EmbeddingCache,
+  EmbeddingFailureKind,
+  CachedEmbedding,
+  Vector,
+} from './embedding/index.js'
+export { cosineSimilarity, similaritySignal, isVector } from './embedding/similarity.js'
+export { InMemoryEmbeddingCache, createInMemoryEmbeddingCache } from './embedding/cache.js'
+export {
+  DeterministicEmbeddingAdapter,
+  createDeterministicEmbeddingAdapter,
+  expandedTermsOf,
+  tokensOf,
+  EXPANDED_TERMS,
+} from './embedding/deterministic.js'
+export type { DeterministicEmbeddingOptions } from './embedding/deterministic.js'
 
 // ── Storage ports: Core never binds to one database ───────────────────────────
 export type { GraphStorageAdapter, GraphReadPort, GraphMutationPort } from './storage/adapter.js'

@@ -7,7 +7,7 @@ import type {
   RetrievalQuery,
   StateValue,
 } from '@episteme/core'
-import { LexicalGraphRetriever, type Retriever } from './retriever.js'
+import { LexicalGraphRetriever, type RankSignal, type Retriever } from './retriever.js'
 
 /**
  * What the learner already understands, as far as this query is concerned.
@@ -74,6 +74,13 @@ export interface RetrieveContextOptions {
    * model is adopted without any caller changing — see `Retriever` in `retriever.ts`.
    */
   readonly retriever?: Retriever
+  /**
+   * Which signals to combine, when the retriever supports a choice.
+   *
+   * Exposed here so a caller can ask "what would lexical alone have found?" without a second code path:
+   * a demo or a test can run the same question through different signal sets and compare.
+   */
+  readonly signals?: readonly RankSignal[]
 }
 
 /**
@@ -121,6 +128,7 @@ export async function retrieveWith(
     ...(options.actorId === undefined ? {} : { actorId: options.actorId }),
     ...(options.tags === undefined ? {} : { tags: options.tags }),
     ...(options.nodeTypes === undefined ? {} : { nodeTypes: options.nodeTypes }),
+    ...(options.signals === undefined ? {} : { signals: options.signals }),
     depth: options.depth ?? 1,
     ...(options.limit === undefined ? {} : { limit: options.limit }),
   })
