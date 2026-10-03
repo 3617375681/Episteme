@@ -1,0 +1,25 @@
+{
+  "name": "@episteme/embeddings-http",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Embedding adapters over HTTP JSON APIs (Ollama, OpenAI-compatible, TEI). No dependency, no native build step.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@episteme/core": "workspace:*"
+  }
+}

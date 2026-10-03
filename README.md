@@ -32,25 +32,27 @@ Future interaction changes
 
 ## Status
 
-**Phase 1.** Understanding survives process restart. The Phase 0 loop is intact — a question, a claim, a
-refinement, a retraction, a fork back to the _earlier_ understanding, retrieval, and a later answer that
-differs _because_ of what was stored — and it now runs over durable local storage.
+**Phase 2.** A learner's prior understanding is recovered even when they ask the same underlying question in
+different words — semantic retrieval behind the existing seam, combined with graph and cognitive signals.
 
 ```bash
 pnpm demo             # Phase 0: the cognitive loop, no persistence
 pnpm demo:persistent  # Phase 1: two sessions over one file, with a restart between them
+pnpm demo:semantic    # Phase 2: a paraphrased question reaching stored cognition
 ```
 
-`pnpm demo:persistent` is the Phase 1 claim in one run:
+`pnpm demo:semantic` is the Phase 2 claim in one run:
 
 ```text
-Session 1   the learner forms an understanding, records it, forks a second line, writes to disk, stops
-Session 2   a new instance over the same file reloads it, and answers differently
-            identical response? false
+stored:    "Self-attention does not encode sequence order."
+later:     "Which word comes first in the input?"
+lexical:   (nothing retrieved)
+hybrid:    the claim, ranked first — matched on meaning, not on words
+answer:    differs from the no-memory control, and survives a restart
 ```
 
-Both demos need no database, no language model and no frontend. Everything else is deferred on purpose;
-see [What v0 does not do](#what-v0-does-not-do).
+All three demos need no database, no model server, no language model and no frontend. Everything else is
+deferred on purpose; see [What v0 does not do](#what-v0-does-not-do).
 
 ## Quick start
 
@@ -59,6 +61,7 @@ pnpm install
 pnpm check              # typecheck + lint + tests
 pnpm demo               # the cognitive loop, printed as a narrative
 pnpm demo:persistent    # the same loop across a restart, over a real file
+pnpm demo:semantic      # a paraphrase recovering stored cognition
 ```
 
 ## Layout
@@ -66,10 +69,11 @@ pnpm demo:persistent    # the same loop across a restart, over a real file
 ```text
 episteme/
 ├── packages/
-│   ├── core/               Episteme Core — ontology, graph, state, events, guards, projection, retrieval
-│   ├── domain-learn/       Learn domain pack: vocabulary, rules and the Retriever seam
+│   ├── core/               Episteme Core — ontology, graph, state, events, guards, projection, embedding port
+│   ├── domain-learn/       Learn domain pack: vocabulary, rules and the retrievers
 │   ├── storage-memory/     In-memory GraphStorageAdapter
 │   ├── storage-local/      Durable GraphStorageAdapter + event store (append-only JSONL)
+│   ├── embeddings-http/    Embedding adapters over HTTP (Ollama, OpenAI-compatible, TEI)
 │   ├── sdk/                Composition: the one place the layers are wired in order
 │   ├── agent/              CognitiveAgent interface + scripted mock (no real model yet)
 │   ├── domain-forum/       [placeholder] Forum domain pack
@@ -77,8 +81,9 @@ episteme/
 ├── apps/                   [placeholder] application shells: learn, forum
 ├── examples/
 │   ├── learn-session/      Phase 0: the cognitive loop
-│   └── persistent-session/ Phase 1: the loop across a process restart
-├── tests/                  Cross-package tests, including the North Star and restart suites
+│   ├── persistent-session/ Phase 1: the loop across a process restart
+│   └── semantic-session/   Phase 2: a paraphrase reaching stored cognition
+├── tests/                  Cross-package tests, including the North Star, restart and paraphrase suites
 └── docs/                   architecture, concepts, decisions (ADRs), roadmap
 ```
 
@@ -164,7 +169,9 @@ opt-in.
 - [ADR 0004 — Domain extension boundary](docs/decisions/0004-domain-extension-boundary.md)
 - [ADR 0005 — Fork lineage](docs/decisions/0005-fork-lineage.md)
 - [ADR 0006 — Persistence format](docs/decisions/0006-persistence-format.md)
+- [ADR 0007 — Semantic retrieval](docs/decisions/0007-semantic-retrieval.md)
 - [Phase 1 report](PHASE1_REPORT.md)
+- [Phase 2 report](PHASE2_REPORT.md)
 
 ## What v0 does not do
 

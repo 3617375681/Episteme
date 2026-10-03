@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "@episteme/tests",
   "version": "0.0.0",
   "private": true,
@@ -11,6 +11,7 @@
     "@episteme/agent": "workspace:*",
     "@episteme/core": "workspace:*",
     "@episteme/domain-learn": "workspace:*",
+    "@episteme/embeddings-http": "workspace:*",
     "@episteme/sdk": "workspace:*",
     "@episteme/storage-local": "workspace:*",
     "@episteme/storage-memory": "workspace:*"

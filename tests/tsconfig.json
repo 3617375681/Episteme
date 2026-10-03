@@ -1,4 +1,4 @@
-{
+﻿{
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
@@ -14,6 +14,7 @@
     { "path": "../packages/storage-local" },
     { "path": "../packages/domain-learn" },
     { "path": "../packages/agent" },
-    { "path": "../packages/sdk" }
+    { "path": "../packages/sdk" },
+    { "path": "../packages/embeddings-http" }
   ]
 }

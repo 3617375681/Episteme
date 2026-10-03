@@ -101,6 +101,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/embeddings-http:
+    dependencies:
+      '@episteme/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/sdk:
     dependencies:
       '@episteme/core':
@@ -136,6 +142,9 @@ importers:
       '@episteme/domain-learn':
         specifier: workspace:*
         version: link:../packages/domain-learn
+      '@episteme/embeddings-http':
+        specifier: workspace:*
+        version: link:../packages/embeddings-http
       '@episteme/sdk':
         specifier: workspace:*
         version: link:../packages/sdk

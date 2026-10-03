@@ -13,7 +13,12 @@ import type { EpochMillis } from '../ontology/primitives.js'
 export interface EmbeddingAdapter {
   /** Identifies the model whose vectors these are. */
   readonly model: string
-  /** The vector width, or `undefined` until the provider has reported it. */
+  /**
+   * The vector width, or `undefined` until the provider has reported it.
+   *
+   * Optional because a caller often does not know the width in advance — a remote provider decides it —
+   * and the alternative would be to require a value nobody can supply.
+   */
   readonly dimensions?: number
   embed(text: string): Promise<Vector>
   embedMany?(texts: readonly string[]): Promise<readonly Vector[]>
