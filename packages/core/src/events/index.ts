@@ -17,6 +17,13 @@ import type { DimensionIndex, StateEvent, StateEventDraft, StateValue } from '..
 export interface IdFactory {
   eventId(): EventId
   branchId(): BranchId
+  /**
+   * Advances the counters past ids that already exist.
+   *
+   * A reloaded history must not reuse an id, so a durable adapter calls this with what it
+   * restored. Optional because a factory used for a single in-process run never needs it.
+   */
+  resume?(existing: { eventIds: readonly string[]; branchIds: readonly string[] }): void
 }
 
 export function createSequentialIdFactory(prefix = ''): IdFactory {
@@ -25,7 +32,28 @@ export function createSequentialIdFactory(prefix = ''): IdFactory {
   return {
     eventId: () => asId<EventId>(`${prefix}evt_${++eventCounter}`),
     branchId: () => asId<BranchId>(`${prefix}br_${++branchCounter}`),
+    resume(existing) {
+      eventCounter = Math.max(eventCounter, highestSuffix(existing.eventIds, `${prefix}evt_`))
+      branchCounter = Math.max(branchCounter, highestSuffix(existing.branchIds, `${prefix}br_`))
+    },
   }
+}
+
+/**
+ * The largest `<n>` among ids shaped `<prefix><n>`.
+ *
+ * Used to resume a counter after reload. Without this, a restarted process would begin at
+ * `evt_1` again and an id already in the log would be reused — which would silently make two
+ * different moments in the history share one identity.
+ */
+function highestSuffix(ids: Iterable<string>, prefix: string): number {
+  let highest = 0
+  for (const id of ids) {
+    if (!id.startsWith(prefix)) continue
+    const parsed = Number.parseInt(id.slice(prefix.length), 10)
+    if (Number.isFinite(parsed) && parsed > highest) highest = parsed
+  }
+  return highest
 }
 
 /**
@@ -102,6 +130,34 @@ export interface EventLogOptions {
   readonly ids?: IdFactory
   /** Seeds the initial branch so the first commit needs no explicit fork. */
   readonly defaultActorId: ActorId
+  /** Durable sink, when the log should outlive the process. */
+  readonly store?: PersistentEventStore
+  /** Restored state. When present the log continues that history instead of starting one. */
+  readonly initialState?: EventLogState
+}
+
+/** The branch a reloaded history continues from when its own branches are unusable. */
+export interface EventLogState {
+  readonly branches: readonly Branch[]
+  readonly events: readonly StateEvent[]
+  readonly branchEvents: readonly {
+    readonly branchId: BranchId
+    readonly eventIds: readonly EventId[]
+  }[]
+  readonly revocations: readonly Revocation[]
+}
+
+/**
+ * Durability seam for the event history.
+ *
+ * Core only needs "hand me what you have" and "here is the whole thing". Compaction, chunking
+ * and incremental writes are the adapter's business: the history is small enough for v0 that
+ * writing it whole is the simplest thing that is actually correct, and a smarter backend can
+ * implement this port without Core changing.
+ */
+export interface PersistentEventStore {
+  load(): Promise<EventLogState | undefined>
+  save(state: EventLogState): Promise<void>
 }
 
 export interface EventCommitResult {
@@ -144,12 +200,19 @@ export class EventLog implements CognitiveStateView {
   #revision = 0
 
   #defaultBranch: BranchId
+  readonly #store: PersistentEventStore | undefined
 
   constructor(options: EventLogOptions) {
     this.#registries = options.registries
     this.#clock = options.clock
     this.#graph = options.graph
     this.#ids = options.ids ?? createSequentialIdFactory()
+    this.#store = options.store
+
+    if (options.initialState !== undefined) {
+      this.#defaultBranch = this.#restore(options.initialState)
+      return
+    }
 
     const branch: Branch = {
       id: this.#ids.branchId(),
@@ -159,6 +222,68 @@ export class EventLog implements CognitiveStateView {
     this.#branches.set(branch.id, branch)
     this.#branchEvents.set(branch.id, [])
     this.#defaultBranch = branch.id
+  }
+
+  /**
+   * Rebuilds the in-memory indexes from restored state.
+   *
+   * Everything derived — the branch→events index, the subject index, the state cache — is
+   * recomputed here rather than persisted. A durable file holds *facts*; an index is an
+   * optimisation that must be reconstructible, or a corrupt index would look like corrupt
+   * history and the two could not be told apart.
+   */
+  #restore(state: EventLogState): BranchId {
+    for (const branch of state.branches) this.#branches.set(branch.id, branch)
+
+    for (const event of state.events) {
+      const restored: StateEvent = Object.freeze({
+        ...event,
+        dimensions: new Map(event.dimensions),
+      })
+      this.#events.set(restored.id, restored)
+      pushTo(this.#bySubject, subjectKey(restored.target, restored.actorId), restored.id)
+    }
+
+    for (const entry of state.branchEvents) {
+      this.#branchEvents.set(entry.branchId, [...entry.eventIds])
+    }
+
+    for (const revocation of state.revocations) {
+      this.#revocations.set(revocation.eventId, Object.freeze({ ...revocation }))
+    }
+
+    // Ids must continue past what was restored, never restart, or a reloaded process would
+    // reuse an id and two different moments would share one identity.
+    this.#ids.resume?.({
+      eventIds: state.events.map((event) => event.id),
+      branchIds: state.branches.map((branch) => branch.id),
+    })
+
+    const [first] = state.branches
+    if (first === undefined) {
+      throw new EpistemeError('guard_rejected', 'restored event log has no branches')
+    }
+    this.#revision += 1
+    return first.id
+  }
+
+  /** Everything needed to rebuild this log: facts only, no indexes. */
+  snapshot(): EventLogState {
+    return {
+      branches: [...this.#branches.values()],
+      events: [...this.#events.values()],
+      branchEvents: [...this.#branchEvents.entries()].map(([branchId, eventIds]) => ({
+        branchId,
+        eventIds: [...eventIds],
+      })),
+      revocations: [...this.#revocations.values()],
+    }
+  }
+
+  /** Writes the current history through the store, if one was configured. */
+  async persist(): Promise<void> {
+    if (this.#store === undefined) return
+    await this.#store.save(this.snapshot())
   }
 
   get defaultBranchId(): BranchId {
@@ -423,21 +548,20 @@ export class EventLog implements CognitiveStateView {
   /**
    * The open ends of the actor's lines of inquiry.
    *
-   * One per branch that holds at least one event *for the requested subject*: a branch is a line
-   * of inquiry, and its last event on this subject is where that line currently stands. Without
-   * the subject check, a branch whose most recent event belongs to a different node would be
-   * reported as an open end of *this* node, and a branch-scoped read would then resolve to that
-   * other event and legitimately — but confusingly — find nothing.
+   * Pass `target` for the honest per-subject answer: a branch holds events for every node its actor
+   * has reasoned about, so "this branch's open end" is ambiguous until the subject is named, and a
+   * branch whose most recent event is about a *different* node would otherwise hide the open end of
+   * this one.
    *
-   * A branch that was forked from before recording anything of its own has no open end, because
-   * its content lives on in the branch that forked from it.
+   * Without a target, one tip is returned per branch — the branch's last event overall — which suits
+   * a history or overview read. A branch that was forked from before recording anything of its own
+   * has no open end, because its content lives on in the branch that forked from it.
    */
   tips(actorId?: ActorId, target?: NodeId): readonly StateEvent[] {
     const tips: StateEvent[] = []
     for (const branch of this.#branches.values()) {
       if (actorId !== undefined && branch.actorId !== actorId) continue
-      const events = this.#branchEvents.get(branch.id) ?? []
-      const last = events[events.length - 1]
+      const last = this.#tipOf(branch.id)
       if (last === undefined) continue
       const event = this.#events.get(last)
       if (event === undefined) continue

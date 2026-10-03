@@ -1,47 +1,84 @@
-# @episteme/storage-local — placeholder
+# @episteme/storage-local
 
-Not implemented. This directory records the intended shape of a durable local storage adapter;
-it contains no code and is not a workspace package yet.
+Durable local storage: one append-only JSONL file that implements both the graph port and the
+event-log port.
 
-`@episteme/storage-memory` is the only backend today, so a process restart loses the graph. This
-package is where that gets fixed, and it must not require any change to Core.
+This is what makes a user's understanding outlive the process. See
+[ADR 0006](../../docs/decisions/0006-persistence-format.md) for why the format is JSONL rather than
+SQLite, and [state-events.md](../../docs/architecture/state-events.md) for what is being stored.
 
-## What it must implement
+## Usage
 
-`GraphStorageAdapter` from `@episteme/core` — a `GraphReadPort` (`getNode`, `getEdge`,
-`listNodes`, `listEdges`, `edgesOf`) plus a `GraphMutationPort` (`putNode`, `putEdge`,
-`deleteNode`, `deleteEdge`). Nothing more: see
-[ADR 0004](../../docs/decisions/0004-storage-and-identity-seams.md) for why the port has this
-exact shape.
+```ts
+import { openLocalStorage } from '@episteme/storage-local'
 
-Two things it must **not** do:
+// Session 1
+const storage = await openLocalStorage('graph.jsonl')
+const episteme = await composeOver(storage)
 
-- **Enforce rules.** The port is deliberately low-level and unguarded; `validateMutation` is the
-  single authority and lives in the graph layer. A backend that also validated would be a second,
-  divergent authority.
-- **Invent identity or time.** Ids and timestamps arrive on the entities from the caller.
+episteme.graph.addNode(/* ... */)
+episteme.log.commit(/* ... */)
 
-## Candidate technology
+await episteme.log.persist() // hands the event history to the store
+await storage.save() // writes the file, atomically
 
-SQLite is the expected choice: a single-file, zero-configuration, transactional store that suits a
-personal cognitive graph. Deciding _this_ is not necessary to decide the port, which is the point
-of having the port.
+// Session 2 — a new process, the same file
+const reopened = await openLocalStorage('graph.jsonl')
+const restored = await composeOver(reopened)
+restored.log.stateOf(claimId, actorId) // understanding is back, derived from the reloaded events
+```
 
-## What actually needs care
+## What it stores
 
-- **Adjacency.** `edgesOf(nodeId)` is in the read port because it is the one operation a backend can
-  do meaningfully better than Core can. It needs a real index, since projection traverses it.
-- **Event history durability.** The event log is the source of truth, so it must be the first thing
-  that is durably stored and the last thing that could be lost. Current state is derivable from it,
-  never the reverse.
-- **Cross-actor isolation.** Personal state is private by default, so a query for one actor's
-  understanding must not be satisfiable by another's rows.
-- **Revoke, not delete.** `state:revoked` hides content from queries by default. Physical deletion
-  is reserved for privacy, legal compliance and account deletion, and must be an explicit
-  operation rather than a side effect.
+| Record kind  | Contents                                               |
+| ------------ | ------------------------------------------------------ |
+| `branch`     | id, actor, `parentBranchId`, `forkPoint`, `createdAt`  |
+| `event`      | the full `StateEvent`, dimensions as an array of pairs |
+| `node`       | the full graph node, including `revoked` / `revokedAt` |
+| `edge`       | the full graph edge                                    |
+| `revocation` | which event was retracted, when, and why               |
 
-## Migration expectation
+Every record carries `schemaVersion: 1` and a `kind`, so a reader can tell what it is holding and a
+future format change can be migrated rather than misread.
 
-The existing `tests/` suite should pass against this adapter with only the storage constructor
-changed. If a backend needs a semantic difference to pass, the port is wrong rather than the
-backend — that is the signal to revisit ADR 0004.
+**Event history is the source of truth; reduced state is never written.** Current understanding is
+always recomputed by folding the reloaded events. An index that had to be trusted would be
+indistinguishable from corrupt history when it disagreed with the facts — so the branch→events index
+and the subject index are rebuilt on load, never persisted.
+
+## API
+
+| Member                                                        | Purpose                                                                      |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `open()`                                                      | reads the file into memory; a missing file is an empty history, not an error |
+| `save(state?)`                                                | absorbs event-log state if given, then writes the whole file atomically      |
+| `load()`                                                      | the persisted history, or `undefined` when there is none                     |
+| `getNode` / `getEdge` / `listNodes` / `listEdges` / `edgesOf` | the graph read port                                                          |
+| `putNode` / `putEdge` / `revokeNode` / `revokeEdge`           | the graph write port                                                         |
+
+`load()` returning `undefined` rather than an empty state is load-bearing: an empty _state_ would be
+"restored" and fail, whereas `undefined` correctly means "start a new history".
+
+## Properties worth knowing
+
+- **Atomic writes.** A temporary file plus a rename, so a crash mid-write leaves the previous complete
+  history intact. Losing the last session is survivable; reading a truncated history as if it were
+  complete is not.
+- **Truncation fails loudly.** A half-written final line raises an error naming the line number,
+  rather than being silently skipped and reported as a shorter history.
+- **Ids never restart.** The event log resumes its counter past the ids it restored, because reusing
+  `evt_1` would make two different moments share one identity.
+- **Retraction is appended, not rewritten.** A revoked entity is written as a new record, so the
+  record of the retraction survives alongside what it retracted.
+- **No physical deletion.** `deleteNode`/`deleteEdge` exist on the port but nothing calls them;
+  removal is a revoke, and erasure is reserved for privacy and legal compliance.
+
+## Known limitations
+
+- The whole file is scanned on open and rewritten on save. A personal cognitive graph is written at
+  human speed, so this is not the constraint yet; the port is where a chunked or SQLite backend would
+  go if it ever becomes one.
+- No compaction: retracted records and superseded nodes accumulate. Forgiving for now, and bounded by
+  human-scale writing.
+- Single file, last writer wins. Concurrent processes on one file are not supported.
+- No encryption at rest. Personal cognitive history is sensitive, so this matters before any real use.

@@ -140,7 +140,14 @@ export type {
   HistoryOrder,
   Branch,
   IdFactory,
+  Revocation,
+  EventLogState,
+  PersistentEventStore,
 } from './events/index.js'
+
+// ── Serialization: the durable form of an event, so adapters need not invent one ──
+export type { SerializedStateEvent } from './events/serialization.js'
+export { toSerializedEvent, fromSerializedEvent } from './events/serialization.js'
 
 // ── Projection: one graph, many views ────────────────────────────────────────
 export { project, selectSeeds, dimensionsOf, toSubGraph } from './projection/index.js'

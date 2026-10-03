@@ -11,6 +11,7 @@
   "references": [
     { "path": "../packages/core" },
     { "path": "../packages/storage-memory" },
+    { "path": "../packages/storage-local" },
     { "path": "../packages/domain-learn" },
     { "path": "../packages/agent" }
   ]

@@ -65,6 +65,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/storage-local:
+    dependencies:
+      '@episteme/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/storage-memory:
     dependencies:
       '@episteme/core':
@@ -82,6 +88,9 @@ importers:
       '@episteme/domain-learn':
         specifier: workspace:*
         version: link:../packages/domain-learn
+      '@episteme/storage-local':
+        specifier: workspace:*
+        version: link:../packages/storage-local
       '@episteme/storage-memory':
         specifier: workspace:*
         version: link:../packages/storage-memory
