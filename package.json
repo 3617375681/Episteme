@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "demo": "pnpm --filter @episteme/example-learn-session demo",
     "demo:persistent": "pnpm --filter @episteme/example-persistent-session demo",
+    "demo:semantic": "pnpm --filter @episteme/example-semantic-session demo",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

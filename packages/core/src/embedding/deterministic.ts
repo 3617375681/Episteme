@@ -33,6 +33,8 @@ export const EXPANDED_TERMS: Readonly<Record<string, readonly string[]>> = {
   index: ['order', 'sequence', 'position', 'index'],
   first: ['order', 'sequence', 'position', 'index'],
   last: ['order', 'sequence', 'position', 'index'],
+  arrange: ['order', 'sequence', 'position', 'index'],
+  arrangement: ['order', 'sequence', 'position', 'index'],
   orderless: ['order', 'permutation', 'invariance'],
 
   // Permutation and invariance.
@@ -100,7 +102,15 @@ export function expandedTermsOf(token: string): readonly string[] {
 }
 
 export interface DeterministicEmbeddingOptions {
-  /** Vector width. Must be a power of two so the hash mask is exact. */
+  /**
+   * Vector width. Must be a power of two so the hash mask is exact.
+   *
+   * Wide by default for a reason worth stating, because it was found the hard way: a hashed bag of words
+   * collides, and collisions become similarity. At 256 dimensions, `"What is the capital of Portugal?"`
+   * scored 0.34 against a claim about token indices — indistinguishable from a true paraphrase at 0.34 —
+   * because both happened to share hash buckets. Widening the space is what made the signal mean
+   * something; the failure was visible only because an unrelated question was in the evaluation set.
+   */
   readonly dimensions?: number
   readonly model?: string
 }
@@ -142,7 +152,7 @@ export class DeterministicEmbeddingAdapter implements EmbeddingAdapter {
   readonly dimensions: number
 
   constructor(options: DeterministicEmbeddingOptions = {}) {
-    this.dimensions = options.dimensions ?? 256
+    this.dimensions = options.dimensions ?? 8192
     if ((this.dimensions & (this.dimensions - 1)) !== 0) {
       throw new TypeError(`dimensions must be a power of two, got ${this.dimensions}`)
     }

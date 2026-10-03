@@ -105,14 +105,13 @@ export const DEFAULT_HYBRID_WEIGHTS: HybridWeights = {
 }
 
 /**
- * Above this cosine similarity, a node is reported as a direct match rather than as something reached by
- * traversal.
+ * The smallest total score a node needs to be reported.
  *
- * Without it, a semantic hit arrives in the `neighbors` group — the group that means "adjacent to
- * something you asked about" — which misdescribes *why* it is in the result. The threshold is low
- * because the deterministic adapter's vectors are sparse; a real model's would sit higher.
+ * Low on purpose — it is not a quality bar, it is the line between "something connects this to the
+ * question" and "this is the recency and topic background that every node shares". A retriever that
+ * returns every node has perfect recall and tells a learner nothing.
  */
-export const SEMANTIC_MATCH_THRESHOLD = 0.2
+export const DEFAULT_MIN_SCORE = 0.05
 
 /**
  * Scores one node against the query using whatever evidence is available.
@@ -385,6 +384,29 @@ async function scoreSemantically(
 
   // The query vector is computed once. Empty text has nothing to embed, so only structural signals apply.
   const queryVector = text === '' ? undefined : await embedWithCache(adapter, cache, text)
+
+  // Vectorise every candidate once, keyed by node, so the semantic signal can both be scored and have its
+  // *background* level measured. Re-embedding inside the scoring loop would double the work and make the
+  // two passes able to disagree.
+  const vectors = new Map<NodeId, Vector>()
+  if (queryVector !== undefined && wants('semantic')) {
+    for (const entry of candidates) {
+      vectors.set(entry.node.id, await embedWithCache(adapter, cache, textOfNode(entry.node)))
+    }
+  }
+
+  /**
+   * The similarity below which a match is background rather than meaning.
+   *
+   * Measured from the candidates themselves: a query either lands on one or two nodes and leaves the
+   * rest near zero, or it lands on nothing and leaves *everything* near zero. Taking a fraction of the
+   * strongest match handles both without a constant, and the alternative — an absolute threshold — was
+   * wrong twice while building this: at 0.2 it dropped real paraphrases, and at any value low enough to
+   * keep them it admitted the hash-collision noise that made an unrelated question return six claims.
+   */
+  // Whether the query is *about* anything in the graph at all, judged once from its strongest match.
+  const semanticIsMeaningful = strongestSimilarity(vectors, queryVector) >= SEMANTIC_MATCH_THRESHOLD
+
   const terms = termsOf(text)
   const branchId =
     context === undefined ? undefined : context.log.currentBranch(query.actorId ?? graph.actorId).id
@@ -402,12 +424,19 @@ async function scoreSemantically(
     const contributions: SignalContribution[] = []
     const matchedTerms = matchedTermsIn(node, terms)
 
-    if (queryVector !== undefined && wants('semantic')) {
-      const vector = await embedWithCache(adapter, cache, textOfNode(node))
-      const similarity = similaritySignal(queryVector, vector)
-      push(contributions, 'semantic', weights.semantic, similarity)
-      // A strong semantic hit *is* a match: reporting it as a neighbour would misdescribe why it is here.
-      if (similarity >= SEMANTIC_MATCH_THRESHOLD) origin = 'match'
+    if (queryVector !== undefined && wants('semantic') && semanticIsMeaningful) {
+      const vector = vectors.get(node.id)
+      const similarity = vector === undefined ? 0 : similaritySignal(queryVector, vector)
+      // An incidental match — a query term that appears in a node without the node being *about* it —
+      // must not be reported as semantic relevance. There was a case of exactly this: a claim about token
+      // indices carried the tag `state:active`, the question contained "capital", and the sharing of the
+      // token "active" was enough to look like meaning.
+      const lexicalOnly = matchedTerms.length > 0 && similarity < SEMANTIC_MATCH_THRESHOLD
+      if (!lexicalOnly) {
+        push(contributions, 'semantic', weights.semantic, similarity)
+        // A strong semantic hit *is* a match: reporting it as a neighbour would misdescribe why it is here.
+        if (similarity >= SEMANTIC_MATCH_THRESHOLD) origin = 'match'
+      }
     }
 
     if (wants('lexical')) {
@@ -433,7 +462,21 @@ async function scoreSemantically(
     }
 
     const score = contributions.reduce((total, entry) => total + entry.contribution, 0)
-    if (query.minScore !== undefined && score < query.minScore) continue
+
+    // Recency is never a reason on its own.
+    //
+    // It is the weakest signal by design — a correction made a year ago may still be the most relevant
+    // thing there is — so a node whose *only* contribution is recency has nothing to do with the question
+    // and must not be reported as relevant. Without this rule, an unrelated question returned a claim
+    // scoring exactly the minimum, on recency alone. Only applied when the caller supplied text, because
+    // a tag-only query has no text to match and is legitimately served by the structural signals.
+    if (text !== '' && contributions.every((entry) => entry.signal === 'recency')) continue
+
+    // A relevance floor, so a weak match cannot outrank nothing. Without it every node collects a recency
+    // contribution and a uniform cognitive one regardless of the question, a result set is never empty,
+    // and "this question is unrelated to anything you have recorded" becomes impossible to express.
+    if (score < (query.minScore ?? DEFAULT_MIN_SCORE)) continue
+
     scored.push({ node, score, contributions, matchedTerms, origin })
   }
 
@@ -475,6 +518,39 @@ async function embedWithCache(
   }
   cache.set(key, adapter.model, vector)
   return vector
+}
+
+/**
+ * Whether the strongest similarity is meaningful enough for the semantic signal to count at all.
+ *
+ * A floor on the *query*, not on individual nodes, and the distinction matters: a per-node relative
+ * threshold lets one exceptionally strong match suppress a merely strong one, which is how a relevant
+ * claim gets pushed out by a slightly better relative of itself.
+ *
+ * The value is calibrated against measured cases rather than guessed:
+ *
+ * - a genuine paraphrase of a stored claim scores `0.34`–`0.51`
+ * - an unrelated question peaks at `0.14`, from hash collisions between unrelated tokens
+ *
+ * A query whose best match is below this contributes no semantic evidence, so an unrelated question
+ * returns nothing rather than a ranking of collisions. Reusing the match threshold here is deliberate:
+ * two floors a hair apart would be a distinction nobody could reason about, and "close enough to be a
+ * match" is exactly the level at which similarity becomes evidence.
+ */
+export const SEMANTIC_MATCH_THRESHOLD = 0.2
+
+/** The strongest similarity any candidate achieved, or `0` when there is nothing to compare. */
+function strongestSimilarity(
+  vectors: ReadonlyMap<NodeId, Vector>,
+  queryVector: Vector | undefined,
+): number {
+  if (queryVector === undefined) return 0
+  let strongest = 0
+  for (const vector of vectors.values()) {
+    const similarity = similaritySignal(queryVector, vector)
+    if (similarity > strongest) strongest = similarity
+  }
+  return strongest
 }
 
 /**

@@ -10,6 +10,7 @@
     { "path": "packages/sdk" },
     { "path": "examples/learn-session" },
     { "path": "examples/persistent-session" },
+    { "path": "examples/semantic-session" },
     { "path": "tests" }
   ]
 }
