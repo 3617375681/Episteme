@@ -16,6 +16,10 @@
     "./seed": {
       "types": "./dist/seed.d.ts",
       "default": "./dist/seed.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
     }
   },
   "bin": {
@@ -25,7 +29,7 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "learn": "tsc -b && node dist/cli.js",
-    "serve": "tsc -b && node dist/server.js"
+    "serve": "tsc -b && node dist/serve.js"
   },
   "dependencies": {
     "@episteme/agent": "workspace:*",

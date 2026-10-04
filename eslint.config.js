@@ -27,7 +27,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.config.{js,ts}', '**/eslint.config.js'],
+    // Config files and standalone helper scripts are not part of any TypeScript project, so the typed
+    // rules cannot run on them. Type-aware linting is worth having everywhere it applies, and applying it
+    // to a file the project service does not know about is a parse error rather than a stricter check.
+    files: ['**/*.config.{js,ts}', '**/eslint.config.js', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
   },
   {

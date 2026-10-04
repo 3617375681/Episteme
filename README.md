@@ -39,6 +39,8 @@ different words — semantic retrieval behind the existing seam, combined with g
 pnpm demo             # Phase 0: the cognitive loop, no persistence
 pnpm demo:persistent  # Phase 1: two sessions over one file, with a restart between them
 pnpm demo:semantic    # Phase 2: a paraphrased question reaching stored cognition
+pnpm learn            # the loop as a surface you can use, in a terminal
+pnpm learn:web        # the same loop in a browser, showing why each result was retrieved
 ```
 
 `pnpm demo:semantic` is the Phase 2 claim in one run:
@@ -62,7 +64,25 @@ pnpm check              # typecheck + lint + tests
 pnpm demo               # the cognitive loop, printed as a narrative
 pnpm demo:persistent    # the same loop across a restart, over a real file
 pnpm demo:semantic      # a paraphrase recovering stored cognition
+pnpm learn              # use it: ask, see why, record, ask again
+pnpm learn:web          # the same, in a browser at http://127.0.0.1:4321
 ```
+
+## Using it
+
+`pnpm learn:web` opens the first version of the actual product surface. The loop is:
+
+```text
+ask in your own words
+  → see which of your own prior understanding was retrieved, and the contribution of each signal
+  → record how well you understand one of those things
+  → ask again, and see the two answers side by side
+```
+
+Before you record anything the answer has to establish the ground. After, it starts from what you said you
+understood. The interface shows the change as a comparison rather than asserting it, and shows the scoring
+weights so the ranking is checkable rather than authoritative. See
+[apps/learn](apps/learn/README.md).
 
 ## Layout
 
@@ -78,7 +98,8 @@ episteme/
 │   ├── agent/              CognitiveAgent interface + scripted mock (no real model yet)
 │   ├── domain-forum/       [placeholder] Forum domain pack
 │   └── logic-bridge/       [placeholder] optional formalisation (Lean, Datalog, SMT)
-├── apps/                   [placeholder] application shells: learn, forum
+├── apps/
+│   └── learn/              The Learn interaction surface: terminal and local web
 ├── examples/
 │   ├── learn-session/      Phase 0: the cognitive loop
 │   ├── persistent-session/ Phase 1: the loop across a process restart

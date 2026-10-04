@@ -11,8 +11,8 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "typecheck": "tsc -b",
-    "pretest": "tsc -b",
+    "typecheck": "tsc -b --force",
+    "pretest": "tsc -b --force",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -23,7 +23,7 @@
     "demo:semantic": "pnpm --filter @episteme/example-semantic-session demo",
     "learn": "pnpm --filter @episteme/app-learn learn",
     "learn:web": "pnpm --filter @episteme/app-learn serve",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm build && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

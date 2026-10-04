@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Episteme · Learn</title>
+    <style>
+      /* A deliberately plain surface. The interesting part of this project is not the layout, and a
+         decorative one would make it harder to see what the system actually did. Colour carries exactly
+         two meanings throughout: accent = "retrieved because of the question", teal = "you recorded this". */
+      :root {
+        --ink: #171a1d;
+        --muted: #6d757d;
+        --faint: #9aa2aa;
+        --line: #e2e5e9;
+        --paper: #fbfaf8;
+        --card: #ffffff;
+        --accent: #b4541f;
+        --accent-soft: #fdf3ec;
+        --teal: #1f6f6b;
+        --teal-soft: #edf6f5;
+        --warn: #8a5a00;
+        --warn-soft: #fdf6e6;
+        --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          15px/1.55 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 24px 96px;
+      }
+
+      /* ── header ─────────────────────────────────────────────────────────── */
+      header {
+        padding: 34px 0 22px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 30px;
+      }
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 17px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin: 0;
+        font-weight: 650;
+      }
+      .topic {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .stats {
+        margin-top: 12px;
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .stats code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink);
+      }
+      .dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--teal);
+        margin-right: 6px;
+      }
+
+      /* ── the ask row ────────────────────────────────────────────────────── */
+      .ask {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .ask input {
+        flex: 1;
+        padding: 13px 15px;
+        font: inherit;
+        font-size: 15.5px;
+        color: var(--ink);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        outline: none;
+      }
+      .ask input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .ask button {
+        padding: 0 22px;
+        font: inherit;
+        font-weight: 600;
+        color: #fff;
+        background: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      .ask button:hover {
+        background: #000;
+      }
+      .ask button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .hints {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-bottom: 30px;
+        display: flex;
+        gap: 8px 20px;
+        flex-wrap: wrap;
+        align-items: baseline;
+      }
+      .hints .lead {
+        color: var(--faint);
+      }
+      .hints button {
+        font: inherit;
+        font-size: 12.5px;
+        color: var(--accent);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .hints button:hover {
+        color: var(--ink);
+      }
+
+      /* The empty state says what the surface is for, because a blank panel teaches nothing. */
+      .intro {
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--card);
+        padding: 22px 24px;
+      }
+      .intro h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+        font-weight: 620;
+      }
+      .intro p {
+        margin: 0 0 11px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .intro ol {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .intro li {
+        margin-bottom: 5px;
+      }
+      .intro code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--ink);
+        background: #f2f3f5;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+
+      /* ── layout ─────────────────────────────────────────────────────────── */
+      .cols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 316px;
+        gap: 30px;
+        align-items: start;
+      }
+      @media (max-width: 940px) {
+        .cols {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      h2 {
+        font-size: 11.5px;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 650;
+      }
+      section {
+        margin-bottom: 32px;
+      }
+
+      /* ── the answer ─────────────────────────────────────────────────────── */
+      .answer {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        padding: 20px 22px;
+      }
+      .answer .badge {
+        display: inline-block;
+        font-size: 11.5px;
+        font-weight: 650;
+        letter-spacing: 0.03em;
+        padding: 3px 9px;
+        border-radius: 20px;
+        margin-bottom: 13px;
+      }
+      .badge.used {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+      .badge.cold {
+        background: #f1f2f4;
+        color: var(--muted);
+      }
+      .answer p {
+        margin: 0;
+        font-size: 16.5px;
+        line-height: 1.6;
+      }
+      .answer .basis {
+        margin-top: 15px;
+        padding-top: 14px;
+        border-top: 1px dashed var(--line);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .answer .basis b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* ── retrieved cards ────────────────────────────────────────────────── */
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        padding: 15px 17px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: border-color 0.12s;
+      }
+      .card:hover {
+        border-color: #c9ced4;
+      }
+      .card.on {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .card.mine {
+        border-left: 3px solid var(--teal);
+      }
+      .card .top {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .card .score {
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--accent);
+        min-width: 46px;
+      }
+      .card .label {
+        flex: 1;
+        font-weight: 550;
+      }
+      .card .id {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--faint);
+      }
+      .card .meta {
+        margin-top: 5px;
+        margin-left: 56px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .card .mine-tag {
+        color: var(--teal);
+        font-weight: 600;
+      }
+
+      /*
+       * The reason a node sits where it does, as arithmetic rather than a claim.
+       *
+       * Compact on purpose: the first version gave each signal a full-width track and stacked five of them,
+       * which made every card about 330px tall and buried the ranking the panel exists to show. A short
+       * track plus the percentage carries the same information in a fifth of the height.
+       */
+      .bars {
+        margin: 10px 0 0 56px;
+        display: grid;
+        gap: 3px;
+      }
+      .bar {
+        display: grid;
+        grid-template-columns: 76px 118px 42px 1fr;
+        gap: 9px;
+        align-items: center;
+        font-size: 11.5px;
+      }
+      .bar .name {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .bar .track {
+        height: 6px;
+        background: #eef0f2;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar .fill {
+        height: 100%;
+        border-radius: 3px;
+        min-width: 2px;
+      }
+      .bar .pct {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--faint);
+        text-align: right;
+      }
+      .bar .why {
+        color: var(--muted);
+        font-size: 11.5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* A signal that contributed nothing recedes instead of competing for attention. */
+      .bar.zero .name,
+      .bar.zero .why {
+        color: #c2c8ce;
+      }
+      .sig-semantic .fill {
+        background: var(--accent);
+      }
+      .sig-lexical .fill {
+        background: #c98a4b;
+      }
+      .sig-graph .fill {
+        background: #7f9a3f;
+      }
+      .sig-cognitive .fill {
+        background: var(--teal);
+      }
+      .sig-recency .fill {
+        background: #b9c0c7;
+      }
+
+      /* ── record panel ───────────────────────────────────────────────────── */
+      .record {
+        background: var(--teal-soft);
+        border: 1px solid #cfe4e2;
+        border-radius: 11px;
+        padding: 18px 20px;
+      }
+      .record .target {
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+      .record .target code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .dims {
+        margin-top: 14px;
+        display: grid;
+        gap: 13px;
+      }
+      .dim .dim-head {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        margin-bottom: 6px;
+      }
+      .dim .dim-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .dim .dim-hint {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .levels {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .levels button {
+        font: inherit;
+        font-size: 12.5px;
+        padding: 5px 12px;
+        border-radius: 7px;
+        cursor: pointer;
+        background: #fff;
+        color: var(--ink);
+        border: 1px solid #cfd5da;
+      }
+      .levels button:hover {
+        border-color: var(--teal);
+      }
+      .levels button.on {
+        background: var(--teal);
+        color: #fff;
+        border-color: var(--teal);
+        font-weight: 600;
+      }
+      .record .note {
+        margin-top: 14px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+
+      /* ── the change, shown as a comparison ──────────────────────────────── */
+      .change {
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--card);
+        overflow: hidden;
+      }
+      .change .row {
+        padding: 15px 18px;
+      }
+      .change .row + .row {
+        border-top: 1px solid var(--line);
+      }
+      .change .tagline {
+        font-size: 11.5px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .change .before .tagline {
+        color: var(--muted);
+      }
+      .change .after .tagline {
+        color: var(--teal);
+      }
+      .change p {
+        margin: 7px 0 0;
+        font-size: 15px;
+      }
+
+      /* ── graph list ─────────────────────────────────────────────────────── */
+      .nodes {
+        display: grid;
+        gap: 6px;
+      }
+      .node {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        padding: 7px 10px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 13.5px;
+      }
+      .node:hover {
+        background: #f2f3f5;
+      }
+      .node.on {
+        background: var(--accent-soft);
+      }
+      .node .k {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--faint);
+        text-transform: uppercase;
+        min-width: 62px;
+      }
+      .node .l {
+        flex: 1;
+      }
+      .node .st {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--teal);
+      }
+      .node .st.none {
+        color: transparent;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-size: 14px;
+        padding: 22px 0;
+      }
+      .placeholder {
+        color: var(--faint);
+        font-size: 14px;
+        border: 1px dashed var(--line);
+        border-radius: 11px;
+        padding: 26px 22px;
+        text-align: center;
+      }
+      .error {
+        background: #fdf0ee;
+        border: 1px solid #f0cdc7;
+        color: #8a2b1a;
+        padding: 12px 15px;
+        border-radius: 9px;
+        font-size: 13.5px;
+        margin-bottom: 14px;
+      }
+      .loading {
+        color: var(--muted);
+        font-size: 14px;
+        padding: 14px 0;
+      }
+      details.legend {
+        margin-top: 26px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      details.legend summary {
+        cursor: pointer;
+      }
+      details.legend .grid {
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        gap: 5px 14px;
+        margin-top: 11px;
+      }
+      details.legend code {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="brand">
+          <h1>Episteme</h1>
+          <span class="topic" id="topic">…</span>
+        </div>
+        <div class="stats" id="stats"></div>
+      </header>
+
+      <div class="ask">
+        <input
+          id="q"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Ask something about this topic — in your own words."
+        />
+        <button id="go">Ask</button>
+      </div>
+      <div class="hints" id="hints"></div>
+
+      <div id="error"></div>
+
+      <div class="cols">
+        <main>
+          <div id="result">
+            <div class="intro">
+              <h3>Ask a question about this topic.</h3>
+              <p>
+                Episteme retrieves whatever in your own graph is relevant, shows which signals put
+                each item where it is, and answers from what you have already recorded. Then you say
+                how well you understand something, and ask again.
+              </p>
+              <ol>
+                <li>The answer before you record anything has to establish the ground.</li>
+                <li>Recording understanding appends an event; nothing is overwritten.</li>
+                <li>
+                  The next answer is re-derived from it, and the difference is shown side by side.
+                </li>
+              </ol>
+            </div>
+          </div>
+        </main>
+
+        <aside>
+          <section>
+            <h2>Record your understanding</h2>
+            <div id="record">
+              <div class="placeholder" style="padding: 18px 16px; font-size: 13px">
+                Pick something from the results or the graph, then say how well you understand it.
+                That record is what changes the next answer.
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h2>Your graph</h2>
+            <div class="nodes" id="nodes"></div>
+          </section>
+
+          <details class="legend">
+            <summary>How relevance is decided</summary>
+            <div class="grid" id="legend"></div>
+            <p style="margin: 12px 0 0">
+              All five signals are within a factor of two of each other, so no single one decides a
+              ranking — that is deliberate. See <code>docs/architecture/retrieval.md</code>.
+            </p>
+          </details>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      // Plain DOM, no framework, no build step: the surface has to stay readable while the interaction
+      // model is still moving, and a bundler would be one more thing between a learner and their graph.
+      const $ = (id) => document.getElementById(id)
+      const el = (tag, cls, text) => {
+        const node = document.createElement(tag)
+        if (cls) node.className = cls
+        if (text !== undefined) node.textContent = text
+        return node
+      }
+
+      const state = {
+        dimensions: [],
+        nodes: [],
+        selected: null,
+        /** The answer from before the last record, so the change can be shown as a comparison. */
+        before: null,
+        last: null,
+        question: '',
+      }
+
+      const api = async (path, body) => {
+        const response = await fetch(path, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: body === undefined ? {} : { 'content-type': 'application/json' },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error || response.statusText)
+        return payload
+      }
+
+      const fail = (message) => {
+        $('error').innerHTML = ''
+        $('error').appendChild(el('div', 'error', message))
+      }
+      const clearError = () => {
+        $('error').innerHTML = ''
+      }
+
+      let latest = null
+
+      function renderState(payload) {
+        latest = payload
+        state.dimensions = payload.dimensions
+        state.nodes = payload.nodes.map((node) => ({
+          ...node,
+          understood: (payload.understanding && payload.understanding[node.nodeId]) || [],
+        }))
+
+        $('topic').textContent = payload.topic.title
+        renderStats(payload)
+
+        $('legend').innerHTML = ''
+        for (const rule of payload.rules) {
+          $('legend').appendChild(el('code', null, rule.signal))
+          $('legend').appendChild(
+            el('span', null, 'weight ' + rule.weight + ' — ' + describe(rule.signal)),
+          )
+        }
+
+        renderNodes()
+        renderRecord()
+
+        $('hints').innerHTML = ''
+        $('hints').appendChild(el('span', 'lead', 'try:'))
+        for (const prompt of [
+          'why is order hard for attention',
+          'what does positional encoding do',
+          'how does RoPE work',
+        ]) {
+          const button = el('button', null, prompt)
+          button.addEventListener('click', () => {
+            $('q').value = prompt
+            ask()
+          })
+          $('hints').appendChild(button)
+        }
+      }
+
+      function renderStats(payload) {
+        $('stats').innerHTML = ''
+        for (const text of [
+          payload.nodes.length + ' nodes',
+          payload.events + ' events',
+          payload.openEnds.length + ' open lines of inquiry',
+          'retriever: ' + payload.retriever,
+        ]) {
+          const span = el('span')
+          span.appendChild(el('span', 'dot'))
+          span.appendChild(document.createTextNode(text))
+          $('stats').appendChild(span)
+        }
+      }
+
+      function describe(signal) {
+        return (
+          {
+            semantic: 'how close in meaning the question is',
+            lexical: 'shared words',
+            graph: 'how close in the graph',
+            cognitive: 'what you have recorded about it',
+            recency: 'how recent',
+          }[signal] || signal
+        )
+      }
+
+      function renderNodes() {
+        $('nodes').innerHTML = ''
+        for (const node of state.nodes) {
+          const row = el('div', 'node' + (state.selected === node.nodeId ? ' on' : ''))
+          row.appendChild(el('span', 'k', shortKind(node.type)))
+          row.appendChild(el('span', 'l', node.label))
+          const understood = node.understood || []
+          row.appendChild(
+            el('span', 'st' + (understood.length ? '' : ' none'), understood.length ? '●' : '·'),
+          )
+          row.addEventListener('click', () => select(node.nodeId))
+          $('nodes').appendChild(row)
+        }
+      }
+
+      const shortKind = (type) =>
+        ({ concept: 'concept', claim: 'claim', question: 'question' })[type] || type
+
+      function select(nodeId) {
+        state.selected = nodeId
+        renderNodes()
+        renderRecord()
+        if (state.last) renderResult(state.last)
+      }
+
+      async function ask() {
+        const question = $('q').value.trim()
+        if (question === '') return
+        await runAsk(question, false)
+      }
+
+      /**
+       * Runs one question.
+       *
+       * `keepBefore` exists because of a subtle ordering problem: the comparison shown after a record is
+       * "the answer before this record" against "the answer after", and re-asking must not wipe the first
+       * half of it. A plain `ask()` clears it, because a genuinely new question makes the old answer an
+       * irrelevant — and therefore misleading — comparison.
+       */
+      async function runAsk(question, keepBefore) {
+        clearError()
+        $('go').disabled = true
+        $('result').innerHTML = ''
+        $('result').appendChild(el('div', 'loading', 'Retrieving…'))
+        try {
+          const result = await api('/api/ask', { question })
+          if (!keepBefore && result.question !== state.question) state.before = null
+          state.question = result.question
+          state.last = result
+          if (state.selected === null && result.ranked.length > 0)
+            state.selected = result.ranked[0].nodeId
+          renderResult(result)
+          renderNodes()
+          renderRecord()
+          await refreshGraph()
+        } catch (error) {
+          fail(error.message)
+          $('result').innerHTML = ''
+        } finally {
+          $('go').disabled = false
+        }
+      }
+
+      function renderResult(result) {
+        const host = $('result')
+        host.innerHTML = ''
+
+        const answer = el('section')
+        const card = el('div', 'answer')
+        card.appendChild(
+          el(
+            'span',
+            'badge ' + (result.usedContext ? 'used' : 'cold'),
+            result.usedContext
+              ? 'built on ' + result.known.length + ' thing(s) you recorded'
+              : 'nothing you recorded was relevant',
+          ),
+        )
+        card.appendChild(el('p', null, result.answer))
+        const basis = el('div', 'basis')
+        basis.appendChild(el('b', null, 'what it was told: '))
+        basis.appendChild(
+          document.createTextNode(result.summary || 'nothing recorded about this yet'),
+        )
+        card.appendChild(basis)
+        answer.appendChild(card)
+        host.appendChild(answer)
+
+        // The comparison, once a record has been made about this same question.
+        if (state.before && state.before.answer !== result.answer) {
+          const section = el('section')
+          section.appendChild(el('h2', null, 'What changed'))
+          const box = el('div', 'change')
+          const beforeRow = el('div', 'row before')
+          beforeRow.appendChild(el('div', 'tagline', 'before you recorded it'))
+          beforeRow.appendChild(el('p', null, state.before.answer))
+          const afterRow = el('div', 'row after')
+          afterRow.appendChild(el('div', 'tagline', 'after'))
+          afterRow.appendChild(el('p', null, result.answer))
+          box.appendChild(beforeRow)
+          box.appendChild(afterRow)
+          section.appendChild(box)
+          host.appendChild(section)
+        }
+
+        const rankedSection = el('section')
+        const heading = el('h2', null, 'Retrieved, most relevant first')
+        rankedSection.appendChild(heading)
+        if (result.ranked.length === 0) {
+          rankedSection.appendChild(
+            el(
+              'div',
+              'empty',
+              'Nothing in your graph is relevant to this. That is itself an answer.',
+            ),
+          )
+        }
+        for (const entry of result.ranked) {
+          rankedSection.appendChild(renderRanked(entry, result))
+        }
+        host.appendChild(rankedSection)
+      }
+
+      function renderRanked(entry, result) {
+        const known = result.known.find((item) => item.nodeId === entry.nodeId)
+        const card = el(
+          'div',
+          'card' + (state.selected === entry.nodeId ? ' on' : '') + (known ? ' mine' : ''),
+        )
+        card.addEventListener('click', () => select(entry.nodeId))
+
+        const top = el('div', 'top')
+        top.appendChild(el('span', 'score', entry.score.toFixed(3)))
+        top.appendChild(el('span', 'label', entry.label))
+        top.appendChild(el('span', 'id', entry.nodeId))
+        card.appendChild(top)
+
+        const meta = el('div', 'meta')
+        meta.appendChild(
+          document.createTextNode(
+            entry.type +
+              ' · ' +
+              (entry.origin === 'match' ? 'direct match' : 'reached through the graph'),
+          ),
+        )
+        if (known) {
+          meta.appendChild(document.createTextNode(' · '))
+          meta.appendChild(
+            el(
+              'span',
+              'mine-tag',
+              'you recorded: ' + known.dimensions.map((d) => d.id + '=' + d.level).join(', '),
+            ),
+          )
+        }
+        card.appendChild(meta)
+
+        const bars = el('div', 'bars')
+        for (const reason of entry.reasons) {
+          // A signal that contributed nothing is shown rather than hidden: "the graph signal did not fire"
+          // is part of why a node is where it is, and dropping the row would hide that.
+          const zero = reason.contribution <= 0
+          const bar = el('div', 'bar sig-' + reason.signal + (zero ? ' zero' : ''))
+          bar.appendChild(el('span', 'name', reason.signal))
+          const track = el('div', 'track')
+          const fill = el('div', 'fill')
+          fill.style.width = Math.max(0, Math.min(100, reason.share * 100)).toFixed(1) + '%'
+          track.appendChild(fill)
+          bar.appendChild(track)
+          bar.appendChild(el('span', 'pct', zero ? '—' : Math.round(reason.share * 100) + '%'))
+          bar.appendChild(el('span', 'why', reason.explanation))
+          bars.appendChild(bar)
+        }
+        card.appendChild(bars)
+        return card
+      }
+
+      function renderRecord() {
+        const host = $('record')
+        host.innerHTML = ''
+        if (state.selected === null) {
+          host.appendChild(el('div', 'placeholder', 'Pick something first.'))
+          return
+        }
+        const node = state.nodes.find((item) => item.nodeId === state.selected)
+        if (!node) {
+          host.appendChild(el('div', 'placeholder', 'Pick something first.'))
+          return
+        }
+
+        host.className = 'record'
+        const target = el('div', 'target')
+        target.appendChild(document.createTextNode(node.label + ' '))
+        target.appendChild(el('code', null, node.nodeId))
+        host.appendChild(target)
+
+        const dims = el('div', 'dims')
+        for (const dimension of state.dimensions) {
+          const wrap = el('div', 'dim')
+          const head = el('div', 'dim-head')
+          head.appendChild(el('span', 'dim-name', dimension.label))
+          head.appendChild(el('span', 'dim-hint', dimension.description))
+          wrap.appendChild(head)
+
+          const levels = el('div', 'levels')
+          const current = (node.understood || []).find((item) => item.id === dimension.id)
+          for (const level of dimension.levels) {
+            const button = el('button', current && current.level === level ? 'on' : null, level)
+            button.addEventListener('click', () => record(dimension.id, level))
+            levels.appendChild(button)
+          }
+          wrap.appendChild(levels)
+          dims.appendChild(wrap)
+        }
+        host.appendChild(dims)
+        host.appendChild(
+          el(
+            'div',
+            'note',
+            'Recording is a new event in an append-only history. Nothing is overwritten, and the answer above is re-derived from it.',
+          ),
+        )
+      }
+
+      async function record(dimension, level) {
+        clearError()
+        // Captured before the write, so the comparison shows the answer as it was *before* this record.
+        // The re-ask below is told to keep it.
+        state.before = state.last
+        const question = state.question
+        try {
+          await api('/api/record', {
+            target: state.selected,
+            dimensions: { [dimension]: level },
+            reason: 'recorded from the learn surface',
+          })
+          await refreshGraph()
+          if (question) await runAsk(question, true)
+        } catch (error) {
+          fail(error.message)
+        }
+      }
+
+      async function refreshGraph() {
+        const payload = await api('/api/state')
+        latest = payload
+        const previous = new Map(state.nodes.map((node) => [node.nodeId, node.understood]))
+        state.nodes = payload.nodes.map((node) => ({
+          ...node,
+          understood:
+            (payload.understanding && payload.understanding[node.nodeId]) ||
+            previous.get(node.nodeId) ||
+            [],
+        }))
+        renderNodes()
+        renderRecord()
+        renderStats(payload)
+      }
+
+      $('go').addEventListener('click', ask)
+      $('q').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') ask()
+      })
+
+      // One request: the server attaches each node's recorded understanding, so the record panel never
+      // renders a node as blank when it is not.
+      async function boot() {
+        renderState(await api('/api/state'))
+      }
+
+      boot().catch((error) => fail(error.message))
+    </script>
+  </body>
+</html>
