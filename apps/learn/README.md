@@ -184,12 +184,16 @@ The script drives the real page over the Chrome DevTools protocol — ask, recor
 screenshot after each step. A screenshot of a static page proves it renders; it does not prove a learner can
 use it. This does.
 
-**Note:** the script asserts that recording changes the answer, so it must run against a graph where that
-particular understanding is not already recorded. Point the server at a fresh file first:
+It is **re-runnable against the same graph**: it picks a level that is not already recorded, so each run
+changes something and the before/after comparison always appears. That was a real defect — the first version
+clicked a fixed level, so a second run recorded the same value, nothing changed, and step 06 reported zero
+rows. That reads as a broken interface and is actually a no-op record.
 
-```bash
-EPISTEME_FILE=/tmp/fresh.jsonl pnpm learn:web
-```
+It also selects buttons **structurally rather than by their text**, because the visible text is Simplified
+Chinese; matching `'low'` against buttons labelled `低` found nothing and threw. A driver that asserts on
+display strings tests the translation, not the interaction.
+
+It does need a browser it can find: the script looks for Edge or Chrome in their standard Windows locations.
 
 Otherwise the second `low` is not a change, and the comparison correctly does not appear — which looks like
 a failure and is not.

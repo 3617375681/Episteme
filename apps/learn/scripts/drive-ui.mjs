@@ -163,18 +163,34 @@ try {
   await step(
     '04-recorded',
     `(async () => {
-      // Record on the highest-ranked node through the same path the buttons use. state.last is the
-      // current result; state.ranked does not exist.
+      // Record on the highest-ranked node through the card's own buttons, which is the path a learner uses.
+      // Selected **structurally** — first row, first button — rather than by matching button text. The text
+      // is Simplified Chinese now, and matching it broke the driver: it looked for "low" among buttons
+      // labelled 低, found nothing, and threw on the click. A driver that asserts on display strings is
+      // testing the translation rather than the interaction.
       const top = state.last.ranked[0].nodeId
       state.selected = top
       renderRecord()
-      const button = [...document.querySelectorAll('.levels button')].find((b) => b.textContent === 'low')
+
+      // Pick a button that is *not* already the recorded value, so the step always changes something.
+      // Without this the driver only passed on a fresh graph: a second run recorded the same value,
+      // nothing changed, no comparison appeared, and step 06 reported zero rows — which looks like a
+      // broken interface and is actually a no-op record.
+      const firstRow = document.querySelector('.card .quick .quickrow')
+      const buttons = firstRow ? [...firstRow.querySelectorAll('button')] : []
+      const unset = buttons.find((b) => !b.classList.contains('on'))
+      const button = unset ?? buttons[0]
+      if (!button) throw new Error('no quick-record button on the first card')
+      const alreadySet = unset === undefined
       button.click()
-      await new Promise((r) => setTimeout(r, 1200))
+      await new Promise((r) => setTimeout(r, 1400))
       return {
         recorded: top,
+        clicked: button.textContent,
         changeBoxShown: document.querySelector('.change') !== null,
         tags: [...document.querySelectorAll('.change .tagline')].map((n) => n.textContent),
+        // True when every level of the first dimension was already recorded, so the click was a no-op.
+        wasAlreadyAtThisValue: alreadySet,
       }
     })()`,
   )
