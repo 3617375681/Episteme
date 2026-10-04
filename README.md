@@ -32,45 +32,42 @@ Future interaction changes
 
 ## Status
 
-**Phase 2.** A learner's prior understanding is recovered even when they ask the same underlying question in
-different words — semantic retrieval behind the existing seam, combined with graph and cognitive signals.
+There is now something you can actually use: **`pnpm learn:web`** opens a local interface where a learner
+asks a question in their own words, sees which of their own prior understanding was retrieved **and why**,
+records what they now understand, and watches the next answer change because of it. Everything is written to
+a plain JSONL file and survives closing the process.
 
-```bash
-pnpm demo             # Phase 0: the cognitive loop, no persistence
-pnpm demo:persistent  # Phase 1: two sessions over one file, with a restart between them
-pnpm demo:semantic    # Phase 2: a paraphrased question reaching stored cognition
-pnpm learn            # the loop as a surface you can use, in a terminal
-pnpm learn:web        # the same loop in a browser, showing why each result was retrieved
-```
+![The Learn surface](docs/images/learn-surface.png)
 
-`pnpm demo:semantic` is the Phase 2 claim in one run:
+Behind it, three phases of work that each proved one thing:
 
-```text
-stored:    "Self-attention does not encode sequence order."
-later:     "Which word comes first in the input?"
-lexical:   (nothing retrieved)
-hybrid:    the claim, ranked first — matched on meaning, not on words
-answer:    differs from the no-memory control, and survives a restart
-```
+| phase | claim                                                             | how to see it          |
+| ----- | ----------------------------------------------------------------- | ---------------------- |
+| 0     | understanding changes and the change affects the next interaction | `pnpm demo`            |
+| 1     | understanding survives a process restart                          | `pnpm demo:persistent` |
+| 2     | a paraphrased question reaches stored cognition                   | `pnpm demo:semantic`   |
 
-All three demos need no database, no model server, no language model and no frontend. Everything else is
-deferred on purpose; see [What v0 does not do](#what-v0-does-not-do).
+All of it runs with **no database, no model server, no language model and no frontend toolchain**. That is
+not an accident of the current state: it is the project's own claim being demonstrated.
 
 ## Quick start
 
 ```bash
 pnpm install
 pnpm check              # typecheck + lint + tests
-pnpm demo               # the cognitive loop, printed as a narrative
-pnpm demo:persistent    # the same loop across a restart, over a real file
-pnpm demo:semantic      # a paraphrase recovering stored cognition
-pnpm learn              # use it: ask, see why, record, ask again
-pnpm learn:web          # the same, in a browser at http://127.0.0.1:4321
+pnpm learn:web          # use it, in a browser at http://127.0.0.1:4321
+# or
+pnpm learn              # the same loop in a terminal
+# and the phase demos:
+pnpm demo && pnpm demo:persistent && pnpm demo:semantic
 ```
+
+`pnpm learn --help` and `pnpm learn:web --help` list the options, including `--file` to choose the graph.
+The default is `~/.episteme/learn.jsonl`.
 
 ## Using it
 
-`pnpm learn:web` opens the first version of the actual product surface. The loop is:
+The loop is:
 
 ```text
 ask in your own words
@@ -81,8 +78,13 @@ ask in your own words
 
 Before you record anything the answer has to establish the ground. After, it starts from what you said you
 understood. The interface shows the change as a comparison rather than asserting it, and shows the scoring
-weights so the ranking is checkable rather than authoritative. See
-[apps/learn](apps/learn/README.md).
+weights so the ranking is checkable rather than authoritative.
+
+You can ask in **Chinese or English**; the seeded topic is bilingual and one graph serves both.
+
+The interface also answers _"what have I understood so far?"_ — grouping everything you have recorded into
+what needs attention next (an unresolved conflict, a missing foundation, something you believe but cannot
+explain yet) and what is already buildable. See [apps/learn](apps/learn/README.md).
 
 ## Layout
 
