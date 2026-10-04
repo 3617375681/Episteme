@@ -138,6 +138,30 @@ export interface ScoredCandidate {
 }
 
 /**
+ * A retriever that can explain its own ranking.
+ *
+ * Separate from `Retriever` because explanation is not something every strategy can offer — a lexical
+ * retriever has matched terms but no contributions — and widening the base interface would force every
+ * implementation to fake one. A caller that wants reasons asks for them explicitly.
+ */
+export interface ExplainingRetriever extends Retriever {
+  /**
+   * The ranked candidates with every signal contribution that produced the order.
+   *
+   * `retrieve()` returns Core's `RetrievalResult`, which is stable and deliberately carries only what a
+   * caller needs to *use* a result. This carries what a caller needs to *show* one: why this node and not
+   * that one. A learner is entitled to know why a piece of their own past understanding surfaced, and a
+   * system that cannot answer that is asking to be trusted rather than checked.
+   */
+  explain(query: RetrieveQuery): Promise<readonly ScoredCandidate[]>
+}
+
+/** Narrowing helper, so a caller does not have to reach for a cast or an `instanceof`. */
+export function canExplain(retriever: Retriever): retriever is ExplainingRetriever {
+  return typeof (retriever as Partial<ExplainingRetriever>).explain === 'function'
+}
+
+/**
  * The deterministic lexical retriever: terms, tags, anchors and graph neighbourhood.
  *
  * This is the Phase 0 behaviour, unchanged, behind the interface. No embeddings and no model: the same
@@ -254,7 +278,7 @@ function gatherCandidates(
 }
 
 /** Ranks candidates by embedding similarity alone. */
-export class EmbeddingRetriever implements Retriever {
+export class EmbeddingRetriever implements ExplainingRetriever {
   readonly name = 'embedding'
   readonly description =
     'Cosine similarity between the question and each candidate, via an adapter.'
@@ -269,8 +293,8 @@ export class EmbeddingRetriever implements Retriever {
     this.#cache = cache
   }
 
-  async retrieve(query: RetrieveQuery): Promise<RetrievalResult> {
-    const scored = await scoreSemantically(this.#graph, this.#adapter, this.#cache, query, {
+  explain(query: RetrieveQuery): Promise<readonly ScoredCandidate[]> {
+    return scoreSemantically(this.#graph, this.#adapter, this.#cache, query, {
       // Only the semantic weight is non-zero, so this is similarity ranking expressed through the same
       // path the hybrid retriever uses rather than a second implementation of it.
       semantic: 1,
@@ -279,7 +303,10 @@ export class EmbeddingRetriever implements Retriever {
       cognitive: 0,
       recency: 0,
     })
-    return toResult(query, scored)
+  }
+
+  async retrieve(query: RetrieveQuery): Promise<RetrievalResult> {
+    return toResult(query, await this.explain(query))
   }
 }
 
@@ -290,7 +317,7 @@ export class EmbeddingRetriever implements Retriever {
  * similarity is one relevance signal, and the graph and the learner's own recorded state are evidence a
  * similarity score cannot see.
  */
-export class HybridRetriever implements Retriever {
+export class HybridRetriever implements ExplainingRetriever {
   readonly name = 'hybrid'
   readonly description =
     'Combines semantic similarity, lexical overlap, graph proximity, the learner\u2019s recorded state and recency.'
@@ -319,18 +346,14 @@ export class HybridRetriever implements Retriever {
     return this.#weights
   }
 
+  explain(query: RetrieveQuery): Promise<readonly ScoredCandidate[]> {
+    return scoreSemantically(this.#graph, this.#adapter, this.#cache, query, this.#weights, {
+      log: this.#log,
+    })
+  }
+
   async retrieve(query: RetrieveQuery): Promise<RetrievalResult> {
-    const scored = await scoreSemantically(
-      this.#graph,
-      this.#adapter,
-      this.#cache,
-      query,
-      this.#weights,
-      {
-        log: this.#log,
-      },
-    )
-    return toResult(query, scored)
+    return toResult(query, await this.explain(query))
   }
 }
 

@@ -34,10 +34,10 @@ EmbeddingCache           ←──  (in-memory; the default and usually the righ
 DeterministicEmbeddingAdapter (test double, in Core)
 ```
 
-| Port | Shape | Why |
-| --- | --- | --- |
+| Port               | Shape                                         | Why                                                                       |
+| ------------------ | --------------------------------------------- | ------------------------------------------------------------------------- |
 | `EmbeddingAdapter` | `model`, `dimensions?`, `embed`, `embedMany?` | provider-neutral; `embedMany` optional because not every provider batches |
-| `EmbeddingCache` | `get`, `set`, `size`, `clear` | derived data, never source of truth |
+| `EmbeddingCache`   | `get`, `set`, `size`, `clear`                 | derived data, never source of truth                                       |
 
 **No vector database, no LangChain, no LlamaIndex, no native build step.** The HTTP adapters use `fetch`,
 for the same reason Phase 1 chose JSONL over SQLite: a learner should not need a toolchain between them and
@@ -68,11 +68,11 @@ indistinguishable from "nothing is relevant".
 
 ## Retriever implementations
 
-| Implementation | Signals | Status |
-| --- | --- | --- |
+| Implementation          | Signals        | Status                                        |
+| ----------------------- | -------------- | --------------------------------------------- |
 | `LexicalGraphRetriever` | lexical, graph | Phase 0 behaviour, unchanged, behind the seam |
-| `EmbeddingRetriever` | semantic | cosine similarity only, via an adapter |
-| `HybridRetriever` | all five | the one a product should use |
+| `EmbeddingRetriever`    | semantic       | cosine similarity only, via an adapter        |
+| `HybridRetriever`       | all five       | the one a product should use                  |
 
 `EmbeddingRetriever` and `HybridRetriever` share **one scoring path**; the embedding-only retriever is that
 path with every other weight at zero. Writing the ranking twice is how the two would drift apart.
@@ -97,15 +97,21 @@ score(node) = w_semantic  · semantic similarity
 ```
 
 ```ts
-DEFAULT_HYBRID_WEIGHTS = { semantic: 0.5, lexical: 0.15, graph: 0.15, cognitive: 0.15, recency: 0.05 }
+DEFAULT_HYBRID_WEIGHTS = {
+  semantic: 0.5,
+  lexical: 0.15,
+  graph: 0.15,
+  cognitive: 0.15,
+  recency: 0.05,
+}
 ```
 
 **Not tuned, and not presented as optimal.** Every weight is within a factor of two of every other, which
-encodes the invariant — *semantic similarity must not become the only meaningful signal* — as a number. A
+encodes the invariant — _semantic similarity must not become the only meaningful signal_ — as a number. A
 semantic weight an order of magnitude above the rest would be vector RAG with extra steps.
 
 Every contribution is recorded in a `SignalContribution`, so a result can explain itself. That matters most
-for the paraphrase case, where the semantic match has no `matchedTerms` and the score *is* the explanation.
+for the paraphrase case, where the semantic match has no `matchedTerms` and the score _is_ the explanation.
 
 ### Three defects found by making the signals comparable
 
@@ -158,8 +164,8 @@ answer:    differs from the no-memory control, and survives a restart
 Both halves are asserted: **the lexical retriever provably misses**, and the semantic path succeeds. Without
 the first assertion the second would prove nothing.
 
-The paraphrase shares **no word** with the claim. An earlier draft used *"why can't attention tell which
-token came first?"* and was rejected because `attention` is a substring of `self-attention` — the lexical
+The paraphrase shares **no word** with the claim. An earlier draft used _"why can't attention tell which
+token came first?"_ and was rejected because `attention` is a substring of `self-attention` — the lexical
 signal genuinely fired, so the test would have proved nothing about meaning. That reasoning is recorded in
 the test's own comments, because the distinction is easy to lose and was lost once already.
 
@@ -177,17 +183,17 @@ node. Recall alone would be gamed by returning everything.
 
 The two cases that matter most are mirrors:
 
-| Query | Must win | Must lose |
-| --- | --- | --- |
-| "Which word comes first in the input?" | the sequence-order claim | the attention-heads claim |
-| "How many attention heads should I use?" | the attention-heads claim | the sequence-order claim |
+| Query                                    | Must win                  | Must lose                 |
+| ---------------------------------------- | ------------------------- | ------------------------- |
+| "Which word comes first in the input?"   | the sequence-order claim  | the attention-heads claim |
+| "How many attention heads should I use?" | the attention-heads claim | the sequence-order claim  |
 
 Both share the word "attention" with the graph, so a retriever ranking on that word passes one and fails the
 other. One case alone would not have caught it.
 
 **The unrelated case found the two real defects.** `"What is the capital of Portugal?"` has no expected
 result, and asserting that turned up the collision noise and the recency-only relevance above. This is the
-phase's most transferable lesson: a case with *nothing* expected is the cheapest way to find a retriever
+phase's most transferable lesson: a case with _nothing_ expected is the cheapest way to find a retriever
 that returns too much.
 
 ---
@@ -243,13 +249,13 @@ left the body resolving the branch-global tip, then filtered the result afterwar
 returned **nothing** whenever a branch's most recent event concerned another node — the exact opposite of the
 answer wanted, and the same class of bug Phase 1 believed it had fixed.
 
-Branch-scoped *reads* had been resolved correctly (`#lastOnBranchFor`); the querying helper had not.
+Branch-scoped _reads_ had been resolved correctly (`#lastOnBranchFor`); the querying helper had not.
 `tips()` now scans each branch for its most recent event about the requested subject, and
 `tests/branch-subject-invariant.test.ts` states the distinction as assertions — including that
 `tips(actor)` and `tips(actor, target)` are **not a filter apart**, which is precisely the confusion.
 
 `docs/decisions/0005-fork-lineage.md` and `PHASE1_REPORT.md` were corrected, and the correction left visible
-rather than quietly rewritten: *documentation asserting a fix is not evidence that the fix exists.*
+rather than quietly rewritten: _documentation asserting a fix is not evidence that the fix exists._
 
 ---
 
@@ -257,32 +263,32 @@ rather than quietly rewritten: *documentation asserting a fix is not evidence th
 
 117 tests across 17 files, all passing.
 
-| File | Covers |
-| --- | --- |
-| `event-history`, `state-reduction`, `fork-ancestry`, `actor-isolation` | Phase 0 semantics, unchanged |
-| `guards` | one validation path; AI cannot author state |
-| `projection` | one graph, many views |
-| `northstar`, `critical-loop` | the project's central claims |
-| `retrieval`, `revocation-and-query` | lexical retrieval, retraction |
-| `serialization` | the versioned persistence contract |
-| `restart-recovery`, `persistence-integrity` | Phase 1 guarantees, unchanged |
-| **`paraphrase-critical-loop`** | the Phase 2 acceptance test |
-| **`retrieval-evaluation`** | the six-case set, hard negatives, determinism, signal isolation |
-| **`branch-subject-invariant`** | branch vs subject vs actor, and that a result names its subject |
-| **`embeddings-http`** | the provider contract and its failure taxonomy |
+| File                                                                   | Covers                                                          |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `event-history`, `state-reduction`, `fork-ancestry`, `actor-isolation` | Phase 0 semantics, unchanged                                    |
+| `guards`                                                               | one validation path; AI cannot author state                     |
+| `projection`                                                           | one graph, many views                                           |
+| `northstar`, `critical-loop`                                           | the project's central claims                                    |
+| `retrieval`, `revocation-and-query`                                    | lexical retrieval, retraction                                   |
+| `serialization`                                                        | the versioned persistence contract                              |
+| `restart-recovery`, `persistence-integrity`                            | Phase 1 guarantees, unchanged                                   |
+| **`paraphrase-critical-loop`**                                         | the Phase 2 acceptance test                                     |
+| **`retrieval-evaluation`**                                             | the six-case set, hard negatives, determinism, signal isolation |
+| **`branch-subject-invariant`**                                         | branch vs subject vs actor, and that a result names its subject |
+| **`embeddings-http`**                                                  | the provider contract and its failure taxonomy                  |
 
 ---
 
 ## Known limitations
 
 - **No live embedding provider was verified here.** The local Ollama build (0.30.5) rejects `/api/embed`
-  (*"start it with `--embeddings`"*) and `ollama serve --help` shows no such flag; its five installed models
+  (_"start it with `--embeddings`"_) and `ollama serve --help` shows no such flag; its five installed models
   are chat models, and ~5 GiB free made pulling an embedding model unreliable. The request/response shapes,
   the failure taxonomy and the guards are tested against a stub; an end-to-end run against a real model is
   not. This is the phase's main unverified surface.
 - **The deterministic adapter is not a language model.** A hashed bag of tokens plus a finite lexicon. A
   paraphrase outside that lexicon will not be found, and the demo says so in its own output. It makes the
-  acceptance test *stronger* (a real model might have matched anyway), but it is not production retrieval.
+  acceptance test _stronger_ (a real model might have matched anyway), but it is not production retrieval.
 - **`SEMANTIC_MATCH_THRESHOLD` is calibrated against that adapter.** A real model's similarity distribution
   differs, so the threshold and the match/neighbour boundary would need revisiting with one.
 - **Weights are untuned** and were not validated against a benchmark.
@@ -321,7 +327,7 @@ different phrasing, and that understanding changes what the system says next. Th
 end — question → retrieval → actor state → agent context → changed answer → new event → persistence →
 restart → retrieval again — and it is proven by tests, not by narrative.
 
-What has never been tested is whether any of it is *usable*. Everything so far is a library, a CLI demo, and
+What has never been tested is whether any of it is _usable_. Everything so far is a library, a CLI demo, and
 a mock agent whose responses are template strings. Three concrete unknowns cannot be answered by more
 backend architecture:
 
@@ -335,7 +341,7 @@ backend architecture:
    confidence" is a guess about what deserves resurfacing. Only a person can confirm it.
 
 The smallest slice that answers them: a **local, single-user learn surface** — a terminal or minimal page
-where a learner types a question, sees which prior understanding was retrieved *and why* (the contributions
+where a learner types a question, sees which prior understanding was retrieved _and why_ (the contributions
 are already recorded), records a state change, and gets an answer built on it. No auth, no accounts, no
 deployment, no frontend framework, and **no new infrastructure** — it composes what exists through
 `@episteme/sdk`.

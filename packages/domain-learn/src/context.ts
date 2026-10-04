@@ -7,7 +7,13 @@ import type {
   RetrievalQuery,
   StateValue,
 } from '@episteme/core'
-import { LexicalGraphRetriever, type RankSignal, type Retriever } from './retriever.js'
+import {
+  LexicalGraphRetriever,
+  canExplain,
+  type RankSignal,
+  type Retriever,
+  type SignalContribution,
+} from './retriever.js'
 
 /**
  * What the learner already understands, as far as this query is concerned.
@@ -48,6 +54,26 @@ export interface RelevantContext {
   readonly query: RetrievalQuery
   /** Which retriever produced this, so a view can be honest about how it looked. */
   readonly retriever: string
+  /**
+   * Why each node was surfaced, when the retriever can say.
+   *
+   * Optional because not every strategy can explain itself, and absent rather than empty: a retriever
+   * with nothing to say must be distinguishable from one that produced no contributions.
+   *
+   * Present here rather than fetched separately so a view can never show reasons that disagree with the
+   * order it is showing — one call produces both.
+   */
+  readonly ranked?: readonly RankedEntry[]
+}
+
+/** One retrieved node together with the evidence that put it where it is. */
+export interface RankedEntry {
+  readonly nodeId: NodeId
+  readonly score: number
+  readonly contributions: readonly SignalContribution[]
+  /** Query terms found literally. Empty for a semantic match, which is itself informative. */
+  readonly matchedTerms: readonly string[]
+  readonly origin: 'match' | 'neighbor'
 }
 
 /**
@@ -134,6 +160,29 @@ export async function retrieveWith(
   })
 
   const actorId = options.actorId
+
+  // Reasons, when the strategy can give them. Collected from the same call that produced the order above,
+  // so a view cannot show an explanation that disagrees with what it is showing.
+  const ranked = canExplain(retriever)
+    ? (
+        await retriever.explain({
+          text: question,
+          ...(actorId === undefined ? {} : { actorId }),
+          ...(options.tags === undefined ? {} : { tags: options.tags }),
+          ...(options.nodeTypes === undefined ? {} : { nodeTypes: options.nodeTypes }),
+          ...(options.signals === undefined ? {} : { signals: options.signals }),
+          depth: options.depth ?? 1,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })
+      ).map((entry) => ({
+        nodeId: entry.node.id,
+        score: entry.score,
+        contributions: entry.contributions,
+        matchedTerms: entry.matchedTerms,
+        origin: entry.origin,
+      }))
+    : undefined
+
   const known: KnownUnderstanding[] = []
   if (actorId !== undefined) {
     for (const node of result.nodes) {
@@ -178,6 +227,7 @@ export async function retrieveWith(
     summary: summarise(known),
     query: result.query,
     retriever: retriever.name,
+    ...(ranked === undefined ? {} : { ranked: Object.freeze(ranked) }),
   })
 }
 

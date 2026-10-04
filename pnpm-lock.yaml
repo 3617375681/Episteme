@@ -36,6 +36,24 @@ importers:
         specifier: ^2.1.8
         version: 2.1.8(@types/node@22.20.5)
 
+  apps/learn:
+    dependencies:
+      '@episteme/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@episteme/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@episteme/domain-learn':
+        specifier: workspace:*
+        version: link:../../packages/domain-learn
+      '@episteme/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@episteme/storage-local':
+        specifier: workspace:*
+        version: link:../../packages/storage-local
+
   examples/learn-session:
     dependencies:
       '@episteme/agent':
@@ -136,6 +154,9 @@ importers:
       '@episteme/agent':
         specifier: workspace:*
         version: link:../packages/agent
+      '@episteme/app-learn':
+        specifier: workspace:*
+        version: link:../apps/learn
       '@episteme/core':
         specifier: workspace:*
         version: link:../packages/core
