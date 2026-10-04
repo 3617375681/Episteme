@@ -940,20 +940,36 @@
         renderRecord()
         renderOpenEnds(payload.openEnds)
         renderProgress(payload.progress)
+        renderHints()
+      }
 
-        $('hints').innerHTML = ''
-        $('hints').appendChild(el('span', 'lead', '试试：'))
-        for (const prompt of [
-          '为什么注意力很难处理顺序',
-          '位置编码到底做了什么',
-          'RoPE 是怎么工作的',
-        ]) {
-          const button = el('button', null, prompt)
+      /**
+       * Suggestion prompts, taken from the learner's own graph.
+       *
+       * An earlier version listed three transformer questions, which became wrong the moment the surface
+       * could be pointed at other material: it would suggest asking about RoPE on a chemistry topic. Deriving
+       * them from the questions actually in the graph means the prompts follow whatever the learner brought,
+       * and are absent rather than misleading when they brought questions of their own.
+       */
+      function renderHints() {
+        const host = $('hints')
+        host.innerHTML = ''
+        const questions = state.nodes.filter((node) => node.type === 'question').slice(0, 3)
+
+        if (questions.length === 0) {
+          // No seeded questions: say what to do instead of offering prompts that do not exist.
+          host.appendChild(el('span', 'lead', '写下你自己的一个问题，或者先加一条你自己的论断。'))
+          return
+        }
+
+        host.appendChild(el('span', 'lead', '试试：'))
+        for (const question of questions) {
+          const button = el('button', null, question.label)
           button.addEventListener('click', () => {
-            $('q').value = prompt
+            $('q').value = question.label
             ask()
           })
-          $('hints').appendChild(button)
+          host.appendChild(button)
         }
       }
 

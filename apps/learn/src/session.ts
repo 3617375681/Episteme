@@ -15,7 +15,6 @@ import {
   EDGE,
   HybridRetriever,
   NODE,
-  contextSummary,
   learnTags,
   retrieveWith,
   toAgentContext,
@@ -362,8 +361,9 @@ export class LearnSession {
       answer: response.text,
       usedContext: response.usedContext,
       retriever: context.retriever,
-      // The display form, so the surface never has to decide what "nothing recorded" reads like.
-      summary: contextSummary(context),
+      // The Chinese display form, decided here so every surface reads the same and no view invents its own
+      // wording for "nothing recorded". `contextSummary` is the English one, used by the English demos.
+      summary: context.summary === '' ? '关于这个，你还没有记录过任何东西' : context.summary,
       known: context.known.map((entry) => ({
         nodeId: entry.nodeId,
         label: entry.label,

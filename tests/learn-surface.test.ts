@@ -247,6 +247,17 @@ describe('the answer is in the learner\u2019s language', () => {
     expect(answer.answer).toContain('不会把它当成已经确定的结论')
   })
 
+  it('reports an empty understanding in Chinese, not the package\u2019s English sentence', async () => {
+    const { cli } = await openCli()
+    const result = await cli.session.ask('为什么这里会这样')
+
+    // `contextSummary` in the domain package returns English prose ("nothing is recorded about this yet"),
+    // which leaked into a Chinese interface. The Learn surface decides its own wording so every view reads
+    // the same and no view invents a second phrasing.
+    expect(result.summary).toBe('关于这个，你还没有记录过任何东西')
+    expect(result.summary).not.toContain('nothing is recorded')
+  })
+
   it('reports retrieval reasons in Chinese as well', async () => {
     const { cli } = await openCli()
     const result = await cli.session.ask('为什么模型必须知道每个词的先后顺序')

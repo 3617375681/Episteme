@@ -25,6 +25,11 @@ export interface SeedTopic {
   readonly source: string
   readonly concepts: readonly { readonly id: string; readonly label: string }[]
   readonly questions: readonly { readonly id: string; readonly label: string }[]
+  /**
+   * Claims the learner was *given* rather than wrote. Seeded at `reference` tier, because the tier decides
+   * whether a node counts as the learner's own understanding.
+   */
+  readonly claims: readonly { readonly id: string; readonly label: string }[]
   readonly edges: readonly { readonly from: string; readonly to: string; readonly type: string }[]
 }
 
@@ -57,6 +62,10 @@ export const TRANSFORMERS: SeedTopic = {
     { id: 'q_heads', label: '应该用多少个注意力头？' },
   ],
 
+  // The transformer topic ships no claims: claims are where a learner's own thinking goes, and the whole
+  // point of the surface is that they write those.
+  claims: [],
+
   edges: [
     // Claims are not seeded — the learner writes those. These link the concepts and questions so the
     // graph signal has a topology to walk, which is what lets a question about RoPE reach the idea of
@@ -86,7 +95,11 @@ export async function seedTopic(
   topic: SeedTopic = TRANSFORMERS,
 ): Promise<{ readonly seeded: boolean; readonly nodeCount: number; readonly edgeCount: number }> {
   const existing = new Set(session.listNodes().map((node) => node.nodeId))
-  const alreadyThere = topic.concepts.some((concept) => existing.has(concept.id))
+  // Every kind counts for the "already seeded" check, not just concepts: a topic file may contain only
+  // questions or claims, and checking concepts alone would re-seed it on every start.
+  const alreadyThere = [...topic.concepts, ...topic.questions, ...topic.claims].some((node) =>
+    existing.has(node.id),
+  )
   if (alreadyThere) return { seeded: false, nodeCount: 0, edgeCount: 0 }
 
   let nodeCount = 0
@@ -106,6 +119,20 @@ export async function seedTopic(
       id: question.id,
       label: question.label,
       type: NODE.question,
+      tier: 'reference',
+      topic: topic.id,
+      source: topic.source,
+    })
+    nodeCount += 1
+  }
+  // A claim from a topic file is material the learner was *given*, so it stays `reference`. The tier decides
+  // whether a node counts as the learner's own understanding, and seeding an authored claim as `thought`
+  // would put words in their mouth before they had said anything.
+  for (const claim of topic.claims) {
+    session.addNodeSync({
+      id: claim.id,
+      label: claim.label,
+      type: NODE.claim,
       tier: 'reference',
       topic: topic.id,
       source: topic.source,

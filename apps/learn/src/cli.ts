@@ -3,7 +3,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { RECORDABLE_DIMENSIONS, LearnSession, type AskResult } from './session.js'
-import { seedTopic, TRANSFORMERS } from './seed.js'
+import { seedTopic, TRANSFORMERS, type SeedTopic } from './seed.js'
+import { BLANK_TOPIC, loadTopicFile } from './topic-file.js'
 
 /**
  * A terminal Learn session.
@@ -100,6 +101,18 @@ const TAKES_ARGUMENT = new Set(['ask', 'explain', 'record', 'claim'])
 export interface CliOptions {
   readonly filePath?: string
   readonly quiet?: boolean
+  /**
+   * The topic to start from. Defaults to the transformer demonstration topic.
+   *
+   * Injected rather than read here, so a caller can point at a topic file without this class knowing about
+   * the filesystem, and a test can hand it a topic directly.
+   */
+  readonly topic?: SeedTopic
+}
+
+/** How many nodes a topic will add, used to tell "blank" apart from "nothing matched". */
+export function topicSize(topic: SeedTopic): number {
+  return topic.concepts.length + topic.questions.length + topic.claims.length
 }
 
 /** Everything the CLI needs, so a test can drive it without a terminal. */
@@ -128,12 +141,15 @@ export class LearnCli {
       options.filePath === undefined ? {} : { filePath: options.filePath },
     )
     const cli = new LearnCli(session, out)
-    const seed = await seedTopic(session)
+    const seed = await seedTopic(session, options.topic)
     if (seed.seeded) {
       cli.#out.write(
-        `已载入起始主题「${TRANSFORMERS.title}」：${seed.nodeCount} 个节点、${seed.edgeCount} 条连接。\n` +
+        `已载入起始主题「${options.topic?.title ?? TRANSFORMERS.title}」：${seed.nodeCount} 个节点、${seed.edgeCount} 条连接。\n` +
           `还没有记录任何理解 —— 那部分是你的。\n\n`,
       )
+    } else if (options.topic !== undefined && topicSize(options.topic) === 0) {
+      // An explicit blank start must look deliberate rather than like a seeding failure.
+      cli.#out.write(`图谱是空的。写下你自己的第一个论断：  claim <你的想法>\n\n`)
     }
     return cli
   }
@@ -168,7 +184,7 @@ export class LearnCli {
     if (command === 'ask') {
       const question = rest.join(' ').trim()
       if (question === '') {
-        this.#out.write('ask 需要一个问题，例如：  ask 为什么注意力很难处理顺序\n')
+        this.#out.write('ask 需要一个问题，例如：  ask 为什么这里会这样\n')
         return true
       }
       await this.#ask(question)
@@ -489,15 +505,39 @@ async function main(): Promise<void> {
       `EPISTEME · Learn —— 一个最小的学习界面\n` +
         `\n  用法：pnpm learn [选项]\n` +
         `\n  选项：\n` +
-        `    -f, --file <路径>   指定图谱文件（默认 ${DEFAULT_PATH}）\n` +
-        `    -h, --help          显示这份说明\n` +
+        `    -f, --file <路径>    指定图谱文件（默认 ${DEFAULT_PATH}）\n` +
+        `    -t, --topic <路径>   从你自己的主题文件开始，而不是内置的示例主题\n` +
+        `        --blank          从空图谱开始，什么都不载入\n` +
+        `    -h, --help           显示这份说明\n` +
         `\n  环境变量：EPISTEME_FILE 与 --file 等效，--file 优先。\n` +
+        `\n  主题文件是一个 JSON：{ "title": ?, "nodes": [{ "label": ?, "kind": ? }] }，\n` +
+        `  kind 可以是 concept（默认）/ question / claim。\n` +
         `\n  在里面输入 "?" 查看会话中的命令。任何其他一行都会被当成问题。\n\n`,
     )
     return
   }
 
   const filePath = optionValue(argv, '--file', '-f') ?? process.env.EPISTEME_FILE ?? DEFAULT_PATH
+  const topicPath = optionValue(argv, '--topic', '-t')
+  const blank = argv.includes('--blank')
+
+  if (topicPath !== undefined && blank) {
+    process.stderr.write('--topic 和 --blank 不能同时使用：一个要载入材料，一个要什么都不载入。\n')
+    process.exit(1)
+  }
+
+  let topic: SeedTopic | undefined
+  try {
+    topic = blank
+      ? BLANK_TOPIC
+      : topicPath === undefined
+        ? undefined
+        : await loadTopicFile(topicPath)
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n`)
+    process.exit(1)
+  }
+
   const out: CliOutput = { write: (text) => process.stdout.write(text) }
 
   process.stdout.write(
@@ -506,7 +546,10 @@ async function main(): Promise<void> {
       `你记录的一切都会保存。先问一个问题；输入 "?" 查看命令。\n\n`,
   )
 
-  const cli = await LearnCli.open(out, { filePath })
+  const cli = await LearnCli.open(out, {
+    filePath,
+    ...(topic === undefined ? {} : { topic }),
+  })
 
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false })
   process.stdout.write('> ')

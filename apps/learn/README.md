@@ -20,6 +20,45 @@ separated and the joined spelling (`--file x` and `--file=x`) work, because a le
 would otherwise silently record their understanding in a file they did not intend — there is a test for
 that, and for the case where a flag's value is missing.
 
+## Bringing your own topic
+
+The seeded transformer topic is a demonstration. A learner working on chemistry should not have to read about
+attention heads to understand the interface:
+
+```bash
+pnpm learn:web --topic ./my-topic.json
+pnpm learn:web --blank          # start from an empty graph and write the first node yourself
+```
+
+```json
+{
+  "title": "有机化学：亲核取代",
+  "about": "从电子推动看取代反应为什么这样发生。",
+  "source": "textbook:clayden",
+  "nodes": [
+    { "label": "亲核取代（SN2）" },
+    { "label": "离去基团" },
+    { "label": "为什么 SN2 会发生构型翻转？", "kind": "question" },
+    { "label": "SN2 是一步完成的", "kind": "claim" }
+  ]
+}
+```
+
+Three properties matter here:
+
+- **A claim from a topic file is seeded at `reference` tier, not `thought`.** The tier decides whether a node
+  counts as the learner's own understanding, and seeding an authored claim as `thought` would put words in
+  their mouth before they had said anything. A test asserts it, along with the fact that **no topic file can
+  carry cognitive state** — nothing in a file may claim what a learner understands.
+- **Validation is strict and loud.** A missing label, an unknown `kind`, invalid JSON: each names the
+  offending entry and fails before the socket opens, rather than serving a graph that silently disagrees with
+  the file the learner wrote.
+- **The interface has no idea what your topic is, and must not pretend to.** Pointing it at chemistry exposed
+  a real leak: the answer template said it would first establish "what self-attention can and cannot
+  represent" — true for the built-in topic, nonsense for anyone else's. The templates are now domain-neutral,
+  the suggestion prompts are derived from the questions actually in the graph rather than hardcoded, and a
+  test asserts that no demo-topic word can appear in an answer about someone else's material.
+
 ## The loop
 
 ```text

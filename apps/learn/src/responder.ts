@@ -28,9 +28,15 @@ export function chineseLearnerResponder(
   const detail = context.detail
 
   // Nothing recorded: this must not imply the system looked and found your understanding. It has none.
+  //
+  // Domain-neutral on purpose. An earlier version said the answer depended on "what self-attention can and
+  // cannot represent" — which was true for the built-in transformer topic and nonsense the moment a learner
+  // brought their own material, because the responder has no idea what the topic is. This template was
+  // written before the surface could be pointed at anything else, and pointing it at chemistry is what
+  // exposed the leak.
   if (summary === '') {
     return {
-      text: `我们先打下地基。关于「${input.text}」—— 要回答它，得先弄清楚自注意力能表达什么、不能表达什么，因为这个问题的前提就是那件事。`,
+      text: `我们先打下地基。关于「${input.text}」—— 要回答它，得先弄清楚它依赖的那些前提，因为这个问题的前提就是那件事。还没有任何你记录过的东西可以支撑它。`,
       usedContext: false,
     }
   }

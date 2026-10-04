@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { RECORDABLE_DIMENSIONS, LearnSession } from './session.js'
-import { seedTopic, TRANSFORMERS } from './seed.js'
+import { seedTopic, TRANSFORMERS, type SeedTopic } from './seed.js'
 
 /**
  * A local HTTP surface for the Learn session.
@@ -28,6 +28,12 @@ export interface ServerOptions {
   readonly host?: string
   /** Where the graph lives. Defaults to a file in the user's home directory. */
   readonly filePath?: string
+  /**
+   * The topic to start from. Defaults to the transformer demonstration topic.
+   *
+   * Injected rather than read here, so this file needs to know nothing about where a topic came from.
+   */
+  readonly topic?: SeedTopic
 }
 
 export interface LearnServer {
@@ -92,10 +98,11 @@ export async function startLearnServer(options: ServerOptions = {}): Promise<Lea
   const filePath = options.filePath ?? process.env.EPISTEME_FILE ?? DEFAULT_PATH
   const session = await LearnSession.open({ filePath })
   // Seeded before the socket opens, so the first request cannot race it and see an empty graph.
-  await seedTopic(session)
+  const seed = await seedTopic(session, options.topic)
+  const topic = options.topic ?? TRANSFORMERS
 
   const server: Server = createServer((request, response) => {
-    handle(request, response, session).catch((error: unknown) => {
+    handle(request, response, session, topic, seed.seeded).catch((error: unknown) => {
       // Every handler that can fail is awaited inside `handle`, so a rejection here is a bug in this file
       // rather than bad input. Reported as 500 with the message, never swallowed: a surface that fails
       // quietly is worse than one that fails visibly.
@@ -133,6 +140,8 @@ async function handle(
   request: IncomingMessage,
   response: ServerResponse,
   session: LearnSession,
+  topic: SeedTopic,
+  seeded: boolean,
 ): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost')
   const path = url.pathname
@@ -161,7 +170,7 @@ async function handle(
     for (const node of nodes) understanding[node.nodeId] = session.understandingOf(node.nodeId)
 
     sendJson(response, 200, {
-      topic: { title: TRANSFORMERS.title, about: TRANSFORMERS.about },
+      topic: { title: topic.title, about: topic.about, seeded },
       dimensions: RECORDABLE_DIMENSIONS,
       nodes,
       understanding,
