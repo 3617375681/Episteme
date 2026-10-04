@@ -383,6 +383,62 @@
         background: #b9c0c7;
       }
 
+      /* The learning-state panel: what the session actually changed, ordered by what to do next. */
+      .progress {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        padding: 15px 17px;
+      }
+      .progress .line {
+        font-size: 13.5px;
+        margin-bottom: 11px;
+      }
+      .progress .group {
+        font-size: 11.5px;
+        font-weight: 650;
+        letter-spacing: 0.03em;
+        margin: 12px 0 5px;
+      }
+      .progress .group.conflict {
+        color: var(--warn);
+      }
+      .progress .group.unexplained {
+        color: var(--accent);
+      }
+      .progress .group.shaky,
+      .progress .group.settled {
+        color: var(--muted);
+      }
+      .progress .item {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 4px 0;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .progress .item:hover .label {
+        color: var(--accent);
+      }
+      .progress .item .label {
+        flex: 1;
+      }
+      .progress .item .state {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--teal);
+      }
+      .progress .hint,
+      .progress .empty {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-top: 11px;
+      }
+      .progress .empty {
+        margin-top: 0;
+      }
+
       /* ── record panel ───────────────────────────────────────────────────── */
       .record {
         background: var(--teal-soft);
@@ -722,6 +778,13 @@
 
         <aside>
           <section>
+            <h2>到目前为止<span class="en">What you have understood</span></h2>
+            <div id="progress">
+              <div class="progress"><div class="empty">加载中…</div></div>
+            </div>
+          </section>
+
+          <section>
             <h2>记录你的理解<span class="en">Record your understanding</span></h2>
             <div id="record">
               <div class="placeholder" style="padding: 18px 16px; font-size: 13px">
@@ -876,6 +939,7 @@
         renderNodes()
         renderRecord()
         renderOpenEnds(payload.openEnds)
+        renderProgress(payload.progress)
 
         $('hints').innerHTML = ''
         $('hints').appendChild(el('span', 'lead', '试试：'))
@@ -923,6 +987,62 @@
        * which is the question a learner actually has when they come back, and it is the reason the
        * branch-versus-subject distinction was worth getting right.
        */
+      /**
+       * What the learner has understood so far, and what deserves attention next.
+       *
+       * The retrieval panel answers "what is relevant to this question" and the graph listing answers "what
+       * exists". Neither answers "what did I get out of this", which is the question a learner has after
+       * using the loop for a while — so this is the only panel that says whether the session changed
+       * anything.
+       */
+      function renderProgress(progress) {
+        const host = $('progress')
+        host.innerHTML = ''
+        const box = el('div', 'progress')
+
+        if (!progress) {
+          box.appendChild(el('div', 'empty', '暂时读不到进度。'))
+          host.appendChild(box)
+          return
+        }
+
+        box.appendChild(el('div', 'line', progress.summary))
+
+        if (progress.items.length === 0) {
+          box.appendChild(
+            el(
+              'div',
+              'hint',
+              '记录一条理解之后，这里会告诉你哪些已经稳了、哪些还需要处理。记录是在结果卡片上直接点的。',
+            ),
+          )
+          host.appendChild(box)
+          return
+        }
+
+        const GROUPS = [
+          ['conflict', '有未解决的冲突 —— 先处理它'],
+          ['shaky', '还没打稳地基 —— 先把这部分弄清楚'],
+          ['unexplained', '讲不清楚 —— 试着讲给别人听'],
+          ['settled', '已经可以往下建'],
+        ]
+
+        for (const [reason, heading] of GROUPS) {
+          const items = progress.items.filter((item) => item.attention === reason)
+          if (items.length === 0) continue
+          box.appendChild(el('div', 'group ' + reason, heading))
+          for (const item of items) {
+            const row = el('div', 'item' + (state.selected === item.nodeId ? ' on' : ''))
+            row.appendChild(el('span', 'label', item.label))
+            row.appendChild(el('span', 'state', describeState(item.dimensions)))
+            row.addEventListener('click', () => select(item.nodeId))
+            box.appendChild(row)
+          }
+        }
+
+        host.appendChild(box)
+      }
+
       function renderOpenEnds(openEnds) {
         const section = $('opensection')
         const host = $('openends')
@@ -1245,6 +1365,7 @@
         renderRecord()
         renderStats(payload)
         renderOpenEnds(payload.openEnds)
+        renderProgress(payload.progress)
       }
 
       $('go').addEventListener('click', ask)

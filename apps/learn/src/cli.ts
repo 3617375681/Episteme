@@ -31,6 +31,7 @@ const COMMANDS: readonly Command[] = [
   { name: 'record', usage: '<节点> <维度> <程度>', help: '记录你现在理解到什么程度' },
   { name: 'claim', usage: '<文字>', help: '把你自己的一个论断加进图谱' },
   { name: 'graph', usage: '', help: '列出你图谱里的全部节点' },
+  { name: 'progress', usage: '', help: '总结你已经理解了什么、接下来该看什么' },
   { name: 'open', usage: '', help: '显示你还没收尾的线索' },
   { name: 'dimensions', usage: '', help: '列出可以记录的维度' },
   { name: 'help', usage: '', help: '显示这份列表' },
@@ -55,6 +56,7 @@ const ALIASES: Readonly<Record<string, string>> = {
   claim: 'claim',
   graph: 'graph',
   list: 'graph',
+  progress: 'progress',
   open: 'open',
   dimensions: 'dimensions',
   dims: 'dimensions',
@@ -196,6 +198,11 @@ export class LearnCli {
 
     if (command === 'graph') {
       this.#printGraph()
+      return true
+    }
+
+    if (command === 'progress') {
+      this.#printProgress()
       return true
     }
 
@@ -367,6 +374,53 @@ export class LearnCli {
       this.#out.write(
         `  ${node.nodeId.padEnd(28)} ${shortKind(node.type).padEnd(6)} ${node.label}${understood}\n`,
       )
+    }
+    this.#out.write('\n')
+  }
+
+  /**
+   * Summarises what the learner has understood and what deserves attention next.
+   *
+   * The loop answers "what is relevant to this question"; `graph` answers "what exists". Neither answers
+   * "what did I get out of this", which is the question a learner has after using it for a while.
+   */
+  #printProgress(): void {
+    const progress = this.#session.progress()
+    this.#out.write(`\n${progress.summary}\n`)
+
+    if (progress.items.length === 0) {
+      this.#out.write(
+        `\n记录一条理解之后，这里会告诉你哪些已经稳了、哪些还需要处理。\n` +
+          `例如：  record claim_1 confidence low\n\n`,
+      )
+      return
+    }
+
+    const labels: Readonly<Record<string, string>> = {
+      conflict: '有未解决的冲突 —— 先处理它',
+      unexplained: '说得出来但讲不清楚 —— 试着讲给别人听',
+      shaky: '记录了，但还不足以往下建',
+      settled: '已经可以往下建',
+    }
+
+    let current = ''
+    for (const item of progress.items) {
+      if (item.attention !== current) {
+        current = item.attention
+        this.#out.write(`\n  ${labels[current] ?? current}：\n`)
+      }
+      const state = item.dimensions
+        .map((entry) => {
+          const definition = RECORDABLE_DIMENSIONS.find((candidate) => candidate.id === entry.id)
+          const name = definition ? definition.labelZh : entry.id
+          const level = definition
+            ? (definition.levelLabelsZh.find((candidate) => candidate.level === entry.level) || {})
+                .label
+            : undefined
+          return `${name}=${level ?? entry.level}`
+        })
+        .join('、')
+      this.#out.write(`    ${item.label}\n      ${item.nodeId} · ${state}\n`)
     }
     this.#out.write('\n')
   }

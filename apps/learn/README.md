@@ -23,6 +23,9 @@ The fourth step is the point. Before anything is recorded the answer has to esta
 it starts from what you said you understood. The interface shows the two answers side by side, so the
 change is a comparison rather than a claim.
 
+`pnpm learn` runs the same loop, and has a `progress` command that prints what the web panel's
+"到目前为止" section shows.
+
 ## Language
 
 **The interface is Simplified Chinese with the English term alongside.** `AGENTS.md` requires Simplified
@@ -86,6 +89,32 @@ this".
 **Nothing-recorded is shown as nothing-recorded.** `summary` is `''` when the learner has recorded nothing,
 and the badge says so, because "the system found nothing relevant" and "the system found nothing" are
 different problems with different fixes.
+
+**"What have I understood?" is answered separately from "what is relevant here?"** The retrieval panel
+answers the second and the graph listing answers "what exists". Neither answers _what did I get out of this_,
+which is the question a learner has after using the loop a while — so `progress()` exists, and it is the only
+thing on the surface that says whether a session changed anything.
+
+It classifies each item the learner has touched into four groups, ordered by what to do next:
+
+| group         | meaning                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| `conflict`    | the learner holds something contradicting this — the system will not build on it, so it goes first |
+| `shaky`       | recorded, but with no ground under it yet                                                          |
+| `unexplained` | believed but not sayable — the situation a scaffold is for                                         |
+| `settled`     | firmly held and explainable; nothing to add by resurfacing it                                      |
+
+`shaky` before `unexplained` is deliberate: an item with no ground at all is more urgent than one that is
+merely hard to put into words. And `unexplained` requires confidence to have been _recorded_ — an unrecorded
+confidence is not evidence of believing, so without that condition every node with a low articulation alone
+would land there and the label would stop distinguishing anything.
+
+**It reuses the ranking's own reading of state** (`SETTLED_DIMENSIONS`, open conflicts) rather than defining
+"understood" a second time. Two definitions would drift, and the panel would end up telling a learner their
+understanding is ready while the cognitive signal was treating it as shaky. A test asserts the agreement.
+
+The classification is coarse on purpose — four groups, not a score. The question is "what should I look at?",
+and a ranked number would imply a precision that a reading of four settable dimensions does not have.
 
 ## Layout
 

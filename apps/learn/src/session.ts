@@ -192,6 +192,45 @@ export interface NodeView {
   readonly tags: readonly string[]
 }
 
+/**
+ * Why an item deserves attention next.
+ *
+ * Deliberately four coarse states rather than a score. The learner's question is "what should I look at?",
+ * and a ranked number would imply a precision this reading does not have — it comes from four settable
+ * dimensions, not from measurement.
+ */
+export type AttentionReason =
+  /** The learner holds something that contradicts this. */
+  | 'conflict'
+  /** Recorded, but not firmly enough to build on. */
+  | 'shaky'
+  /** Believed without being explainable — the situation a scaffold is for. */
+  | 'unexplained'
+  /** Firmly held and explainable. Nothing to add by resurfacing it. */
+  | 'settled'
+
+export interface ProgressItem {
+  readonly nodeId: string
+  readonly label: string
+  readonly type: string
+  readonly dimensions: readonly { readonly id: string; readonly level: string }[]
+  readonly settled: boolean
+  readonly openConflicts: readonly string[]
+  readonly attention: AttentionReason
+}
+
+export interface ProgressSummary {
+  /** How many nodes the learner has recorded anything about. */
+  readonly touched: number
+  readonly settled: number
+  readonly withOpenConflict: number
+  readonly totalNodes: number
+  /** Most in need of attention first. */
+  readonly items: readonly ProgressItem[]
+  /** One readable line, so a surface does not have to compose the numbers itself. */
+  readonly summary: string
+}
+
 export interface SessionOptions {
   /** Where the graph lives. Without one, the session is in memory and loses everything on exit. */
   readonly filePath?: string
@@ -546,6 +585,74 @@ export class LearnSession {
   }
 
   /**
+   * What the learner has actually understood so far, and what deserves attention next.
+   *
+   * This answers the question a learner has after using the loop a few times — *what did I get out of this?* —
+   * which nothing else on the surface does. Retrieval answers "what is relevant to this question"; the graph
+   * listing answers "what exists". Neither says whether the session changed anything.
+   *
+   * Reuses the same reading of state that ranking uses (`SETTLED_DIMENSIONS`, open conflicts) rather than
+   * inventing a second definition of "understood". A second definition would drift from the one the cognitive
+   * relevance signal is built on, and the two would disagree about the same learner.
+   */
+  progress(): ProgressSummary {
+    const items: ProgressItem[] = []
+
+    for (const node of this.listNodes()) {
+      const state = this.#episteme.log.stateOf(asId<NodeId>(node.nodeId), HUMAN)
+      if (state.size === 0) continue // Untouched reference material is not progress.
+
+      const dimensions = [...state]
+        .map(([id, value]) => ({ id, level: value.level ?? String(value.scalar ?? '?') }))
+        .sort((left, right) => (left.id < right.id ? -1 : 1))
+      const levelOf = (id: string): string | undefined =>
+        dimensions.find((entry) => entry.id === id)?.level
+
+      const openConflicts = dimensions
+        .filter((entry) => entry.id === DIMENSION.conflict && entry.level !== 'none')
+        .map((entry) => entry.level)
+
+      // Same predicate as `retrieveWith`: a dimension in its settled band makes the item buildable.
+      const settled =
+        (['medium', 'high'] as const).includes(
+          levelOf(DIMENSION.confidence) as 'medium' | 'high',
+        ) &&
+        (['medium', 'high'] as const).includes(levelOf(DIMENSION.articulation) as 'medium' | 'high')
+
+      items.push({
+        nodeId: node.nodeId,
+        label: node.label,
+        type: node.type,
+        dimensions,
+        settled,
+        openConflicts,
+        attention: attentionFor(dimensions, settled, openConflicts),
+      })
+    }
+
+    // Most in need of attention first, so the panel opens on something worth doing rather than on whatever
+    // happened to be recorded first. `shaky` precedes `unexplained`: an item with no ground under it is the
+    // more urgent of the two, since there is nothing to build on at all.
+    const order = { conflict: 0, shaky: 1, unexplained: 2, settled: 3 } as const
+    items.sort((left, right) => {
+      if (order[left.attention] !== order[right.attention]) {
+        return order[left.attention] - order[right.attention]
+      }
+      return left.label < right.label ? -1 : 1
+    })
+
+    const settledCount = items.filter((item) => item.settled).length
+    return {
+      touched: items.length,
+      settled: settledCount,
+      withOpenConflict: items.filter((item) => item.openConflicts.length > 0).length,
+      totalNodes: this.listNodes().length,
+      items,
+      summary: progressLine(items.length, settledCount),
+    }
+  }
+
+  /**
    * Writes the history through the store, if there is one.
    *
    * Serialised behind a promise chain because two concurrent callers could otherwise interleave a read of
@@ -686,4 +793,43 @@ function slug(text: string): string {
       .replace(/^_+|_+$/gu, '')
       .slice(0, 40) || 'node'
   )
+}
+
+/**
+ * Classifies one recorded item by what would help the learner next.
+ *
+ * Order matters: an open conflict outranks everything, because it is the one state the system explicitly
+ * refuses to build on. Surfacing a settled item by mistake is a smaller failure than ignoring a conflict the
+ * learner took the trouble to mark.
+ */
+function attentionFor(
+  dimensions: readonly { readonly id: string; readonly level: string }[],
+  settled: boolean,
+  openConflicts: readonly string[],
+): AttentionReason {
+  if (openConflicts.length > 0) return 'conflict'
+
+  const levelOf = (id: string): string | undefined =>
+    dimensions.find((entry) => entry.id === id)?.level
+
+  // Believed but not sayable — which requires the belief to have been *recorded*. An unrecorded confidence
+  // is not evidence of believing, so `unexplained` needs confidence to be present and not low. Without that,
+  // every node with a low articulation alone would be labelled this way and the label would stop meaning
+  // anything distinct from `shaky`.
+  const confidence = levelOf(DIMENSION.confidence)
+  if (
+    levelOf(DIMENSION.articulation) === 'low' &&
+    confidence !== undefined &&
+    confidence !== 'low'
+  ) {
+    return 'unexplained'
+  }
+
+  return settled ? 'settled' : 'shaky'
+}
+
+/** One readable line, so every surface does not compose the same sentence differently. */
+function progressLine(touched: number, settled: number): string {
+  if (touched === 0) return '你还没有记录过任何理解'
+  return `你为 ${touched} 个节点记录过理解，其中 ${settled} 个已经可以往下建`
 }
