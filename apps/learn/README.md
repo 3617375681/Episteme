@@ -10,6 +10,16 @@ pnpm learn:web    # local web surface at http://127.0.0.1:4321
 
 Both run the same loop, over the same graph file, through the same `LearnSession`.
 
+```bash
+pnpm learn --help
+pnpm learn:web --file /tmp/chemistry.jsonl --port 4400
+```
+
+`--file` (or `EPISTEME_FILE`) chooses the graph; the default is `~/.episteme/learn.jsonl`. Both the
+separated and the joined spelling (`--file x` and `--file=x`) work, because a learner who guesses wrong
+would otherwise silently record their understanding in a file they did not intend — there is a test for
+that, and for the case where a flag's value is missing.
+
 ## The loop
 
 ```text
