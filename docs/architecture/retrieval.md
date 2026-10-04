@@ -287,8 +287,27 @@ shares. It is not a substitute for a real provider, and the demo says so in its 
 - **No live provider was verified** in this environment, as above.
 - **Weights are untuned** and were not validated against a benchmark.
 - **The deterministic adapter's lexicon is finite**; a paraphrase outside it will not be found.
-- **Full scan.** `retrieve()` scores every candidate against every signal, and embeddings are computed per
-  node on first use. Fine at the scale of one person's graph; an index is where it would go.
+- **Full scan, measured.** `retrieve()` scores every candidate against every signal, and candidate text is
+  embedded on demand. Measured on this machine, with graphs built to be realistic in size and noise:
+
+  | nodes | first query | subsequent | top result |
+  | ----- | ----------- | ---------- | ---------- |
+  | 50    | ~25 ms      | ~1 ms      | correct    |
+  | 200   | ~29 ms      | ~4 ms      | correct    |
+  | 500   | ~73 ms      | ~10 ms     | correct    |
+  | 1000  | ~120 ms     | ~20 ms     | correct    |
+
+  Two things worth noting, because one of them was a wrong assumption. The first query is linear in the graph
+  and later ones are cache-warm; and **adding one node does not re-embed the graph** — the cache grew by a
+  small constant, not by the node count, because only newly reachable text is embedded. That was worth
+  checking rather than assuming: a coarser cache key would have made the price of every edit the size of the
+  graph.
+
+  `tests/retrieval-at-scale.test.ts` asserts the behaviour — correct top result among hundreds of unrelated
+  nodes, cold and warm agreeing, a bounded cache delta per edit — and **not** the timings. A millisecond
+  threshold on shared hardware fails for reasons unrelated to the code, and the numbers are more useful
+  written down than asserted.
+
 - **No relevance feedback**: nothing records which retrieved context actually helped, which is the signal that
   would let the weights be learned rather than guessed.
 - **No query rewriting or reranking.** Both were excluded deliberately; the graph and state signals are meant
