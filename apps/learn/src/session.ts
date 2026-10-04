@@ -16,7 +16,6 @@ import {
   HybridRetriever,
   NODE,
   contextSummary,
-  learnerResponder,
   learnTags,
   retrieveWith,
   toAgentContext,
@@ -25,6 +24,7 @@ import {
   type Retriever,
 } from '@episteme/domain-learn'
 import { MockCognitiveAgent } from '@episteme/agent'
+import { chineseLearnerResponder } from './responder.js'
 import { agentActor, humanActor, openEpisteme, type Episteme } from '@episteme/sdk'
 import { openLocalStorage } from '@episteme/storage-local'
 
@@ -54,8 +54,13 @@ const SCAFFOLD = asId<ActorId>('actor_scaffold')
 export interface RecordableDimension {
   readonly id: DimensionId
   readonly label: string
+  /** The same label in Simplified Chinese, shown first to the learner. */
+  readonly labelZh: string
   readonly levels: readonly string[]
+  /** Levels with their Chinese names, in the same order as `levels`. */
+  readonly levelLabelsZh: readonly { readonly level: string; readonly label: string }[]
   readonly description: string
+  readonly descriptionZh: string
 }
 
 /**
@@ -64,31 +69,64 @@ export interface RecordableDimension {
  * Deliberately a subset of the registered axes. The others are recorded by other means or are not yet
  * settable by hand, and offering a control for a dimension whose meaning is unclear would invite the
  * learner to record something they cannot interpret later.
+ *
+ * Chinese and English are both carried here rather than translated in a view, so the two cannot drift:
+ * `AGENTS.md` requires Simplified Chinese for user-facing prose and English for code, and a dimension whose
+ * Chinese name disagrees with its English one would be a correctness problem, not a cosmetic one.
  */
 export const RECORDABLE_DIMENSIONS: readonly RecordableDimension[] = [
   {
     id: DIMENSION.confidence,
     label: 'Confidence',
+    labelZh: '确信程度',
     levels: ['low', 'medium', 'high'],
+    levelLabelsZh: [
+      { level: 'low', label: '低' },
+      { level: 'medium', label: '中' },
+      { level: 'high', label: '高' },
+    ],
     description: 'How much you would rely on this.',
+    descriptionZh: '你愿意多大程度上依赖它。',
   },
   {
     id: DIMENSION.articulation,
     label: 'Articulation',
+    labelZh: '表达程度',
     levels: ['low', 'medium', 'high'],
+    levelLabelsZh: [
+      { level: 'low', label: '低' },
+      { level: 'medium', label: '中' },
+      { level: 'high', label: '高' },
+    ],
     description: 'How well you could explain it to someone else.',
+    descriptionZh: '你能多好地把它讲给别人听。',
   },
   {
     id: DIMENSION.evidence,
     label: 'Evidence',
+    labelZh: '证据',
     levels: ['none', 'weak', 'reproduced', 'derived'],
+    levelLabelsZh: [
+      { level: 'none', label: '无' },
+      { level: 'weak', label: '薄弱' },
+      { level: 'reproduced', label: '已复现' },
+      { level: 'derived', label: '已推导' },
+    ],
     description: 'What backs it up.',
+    descriptionZh: '它背后有什么支撑。',
   },
   {
     id: DIMENSION.conflict,
     label: 'Conflict',
+    labelZh: '冲突',
     levels: ['none', 'open', 'resolved'],
+    levelLabelsZh: [
+      { level: 'none', label: '无' },
+      { level: 'open', label: '未解决' },
+      { level: 'resolved', label: '已解决' },
+    ],
     description: 'Whether you hold something that contradicts it.',
+    descriptionZh: '你是否同时持有与它矛盾的东西。',
   },
 ]
 
@@ -113,6 +151,10 @@ export interface ReasonView {
   readonly share: number
   /** How this signal is being read, in the learner's terms. */
   readonly explanation: string
+  /** The same reading in Simplified Chinese, for the primary learner-facing display. */
+  readonly explanationZh: string
+  /** The signal's name in Chinese. */
+  readonly labelZh: string
 }
 
 /** What this actor has recorded about one retrieved node. */
@@ -167,7 +209,7 @@ export interface SessionOptions {
 export class LearnSession {
   readonly #episteme: Episteme
   readonly #retriever: Retriever
-  readonly #agent = new MockCognitiveAgent({ responder: learnerResponder })
+  readonly #agent = new MockCognitiveAgent({ responder: chineseLearnerResponder })
   readonly #store: { save(state?: unknown): Promise<void> } | undefined
   #saveChain: Promise<void> = Promise.resolve()
 
@@ -184,7 +226,7 @@ export class LearnSession {
   /**
    * Opens a session, reading any existing history first.
    *
-   * The ordering — load, then compose — is the rule `@episteme/sdk` exists to hold, so this does not
+   * The ordering 鈥?load, then compose 鈥?is the rule `@episteme/sdk` exists to hold, so this does not
    * repeat it.
    */
   static async open(options: SessionOptions = {}): Promise<LearnSession> {
@@ -353,8 +395,8 @@ export class LearnSession {
   /**
    * Adds a claim or concept the learner is working with, so the graph is theirs rather than a fixture.
    *
-   * Only the kinds a learner actually writes are accepted here. Anything else — evidence, synthesis, raw
-   * notes — has its own lifecycle, and a surface that let a learner create all nine node types from one
+   * Only the kinds a learner actually writes are accepted here. Anything else 鈥?evidence, synthesis, raw
+   * notes 鈥?has its own lifecycle, and a surface that let a learner create all nine node types from one
    * text box would be teaching them the ontology instead of the subject.
    */
   async addNode(input: {
@@ -389,7 +431,7 @@ export class LearnSession {
    *
    * Short because these ids are typed by hand: the surface asks a learner to name a node when recording
    * their understanding, and the first version used a slug of the label, which produced
-   * `node_0_self_attention_cannot_tell_which_word_ca` — truncated mid-word and impractical to type. A
+   * `node_0_self_attention_cannot_tell_which_word_ca` 鈥?truncated mid-word and impractical to type. A
    * learner's own vocabulary should not be turned into an identifier they cannot say.
    */
   #nextId(kind: 'claim' | 'concept' | 'question'): string {
@@ -407,7 +449,7 @@ export class LearnSession {
    * Resolves a node the learner referred to by id or by an unambiguous prefix.
    *
    * Returns every match rather than guessing, so an ambiguous prefix produces a message naming the
-   * candidates instead of silently recording understanding against the wrong node — which would be a
+   * candidates instead of silently recording understanding against the wrong node 鈥?which would be a
    * permanent, validated, wrong fact in their history.
    */
   resolveNodes(reference: string): readonly NodeView[] {
@@ -420,7 +462,7 @@ export class LearnSession {
   /**
    * The unflushed half of `addNode`.
    *
-   * Exists so a batch — seeding a topic — is one write rather than one write per node. Callers that use it
+   * Exists so a batch 鈥?seeding a topic 鈥?is one write rather than one write per node. Callers that use it
    * must `flush()` themselves; every path in this file that does is listed next to its `flush()` call.
    */
   addNodeSync(input: {
@@ -554,6 +596,8 @@ function toRankedView(context: RelevantContext): readonly RankedView[] {
         contribution: contribution.contribution,
         share: entry.score === 0 ? 0 : contribution.contribution / entry.score,
         explanation: explainSignal(contribution.signal, contribution.value, entry.matchedTerms),
+        explanationZh: explainSignalZh(contribution.signal, contribution.value, entry.matchedTerms),
+        labelZh: SIGNAL_LABELS_ZH[contribution.signal] ?? contribution.signal,
       }))
 
     return {
@@ -566,6 +610,15 @@ function toRankedView(context: RelevantContext): readonly RankedView[] {
       reasons,
     }
   })
+}
+
+/** The signal names in Simplified Chinese, for the learner-facing display. */
+export const SIGNAL_LABELS_ZH: Readonly<Record<string, string>> = {
+  semantic: '语义',
+  lexical: '词面',
+  graph: '图谱',
+  cognitive: '你的理解',
+  recency: '新旧',
 }
 
 /**
@@ -586,13 +639,40 @@ function explainSignal(signal: string, value: number, matchedTerms: readonly str
         ? `shares the words ${matchedTerms.map((term) => `"${term}"`).join(', ')}`
         : 'no words in common with your question'
     case 'graph':
-      return value >= 1 ? 'is what you asked about' : 'is connected to what you asked about'
+      // "Connected to", not "is": a node can score full graph proximity without being the question's
+      // subject at all, and the stronger phrasing claimed something the data does not say. It read as a
+      // defect on a node the learner had never asked about.
+      return value >= 1
+        ? 'is directly connected to what you asked about'
+        : 'is connected to what you asked about'
     case 'cognitive':
       return value === 0
         ? 'you have not recorded anything about it'
         : 'your own recorded understanding makes it worth resurfacing'
     case 'recency':
       return 'recently added or changed'
+    default:
+      return signal
+  }
+}
+
+/** The same reading in Simplified Chinese, which is what the learner actually reads. */
+function explainSignalZh(signal: string, value: number, matchedTerms: readonly string[]): string {
+  switch (signal) {
+    case 'semantic':
+      return value === 0
+        ? '和你的问题在含义上不相近'
+        : `和你的问题在含义上相近（相似度 ${(value * 100).toFixed(0)}%）`
+    case 'lexical':
+      return matchedTerms.length > 0
+        ? `和你的问题共有这些词：${matchedTerms.map((term) => `「${term}」`).join('、')}`
+        : '和你的问题没有共同词'
+    case 'graph':
+      return value >= 1 ? '和你检索到的内容直接相连' : '和你问的东西在图谱上相连'
+    case 'cognitive':
+      return value === 0 ? '你还没有为它记录过任何理解' : '你自己记录过的理解让它值得再次出现'
+    case 'recency':
+      return '最近新增或改动过'
     default:
       return signal
   }

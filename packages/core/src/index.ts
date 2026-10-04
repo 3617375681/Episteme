@@ -154,7 +154,7 @@ export { project, selectSeeds, dimensionsOf, toSubGraph } from './projection/ind
 export type { Projection, ProjectionFilter } from './projection/index.js'
 
 // ── Retrieval: getting previous understanding back ───────────────────────────
-export { retrieve, termsOf, matchedTermsIn } from './retrieval/index.js'
+export { retrieve, termsOf, matchedTermsIn, isStopWord } from './retrieval/index.js'
 export type { RetrievalQuery, RetrievalResult, RetrievedNode } from './retrieval/index.js'
 
 // ── Embedding port: semantics behind an adapter, never a Core dependency ─────
@@ -172,8 +172,13 @@ export {
   DeterministicEmbeddingAdapter,
   createDeterministicEmbeddingAdapter,
   expandedTermsOf,
+  lexiconTermsOf,
+  lexiconTokens,
+  retrievalTokens,
   tokensOf,
   EXPANDED_TERMS,
+  CHINESE_TERMS,
+  CHINESE_STOP_WORDS,
 } from './embedding/deterministic.js'
 export type { DeterministicEmbeddingOptions } from './embedding/deterministic.js'
 

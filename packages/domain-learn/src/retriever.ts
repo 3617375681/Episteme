@@ -6,7 +6,7 @@ import {
   similaritySignal,
   queryNodes,
   retrieve as coreRetrieve,
-  termsOf,
+  retrievalTokens,
   type ActorId,
   type CoreGraph,
   type EmbeddingAdapter,
@@ -24,7 +24,7 @@ import {
 /**
  * A retrieval request.
  *
- * Extends Core's `RetrievalQuery`, which carries the structural part — text, anchors, tags, node types,
+ * Extends Core's `RetrievalQuery`, which carries the structural part 閳?text, anchors, tags, node types,
  * depth, limit. A retriever adds only what it can use beyond structure.
  */
 export interface RetrieveQuery {
@@ -84,7 +84,7 @@ export interface HybridWeights {
  *
  * The requirement is the project's central invariant: **semantic similarity must not be the only
  * meaningful signal.** Every weight is therefore within a factor of two of every other, so no single
- * term can decide a ranking on its own. That is a structural choice, not a tuned one — a semantic weight
+ * term can decide a ranking on its own. That is a structural choice, not a tuned one 閳?a semantic weight
  * an order of magnitude above the rest would be vector RAG with extra steps, which is exactly what this
  * project must not become.
  *
@@ -92,7 +92,7 @@ export interface HybridWeights {
  * still be the most relevant thing there is. It exists mainly to make the ordering total.
  *
  * These are deliberately not presented as optimal, and they were not tuned against a benchmark. What
- * they *are* is the point at which the semantic signal can do the job it exists for — an earlier
+ * they *are* is the point at which the semantic signal can do the job it exists for 閳?an earlier
  * arrangement had it contributing under two percent of the total, which made the retriever hybrid in
  * name only. See `docs/architecture/retrieval.md`.
  */
@@ -107,7 +107,7 @@ export const DEFAULT_HYBRID_WEIGHTS: HybridWeights = {
 /**
  * The smallest total score a node needs to be reported.
  *
- * Low on purpose — it is not a quality bar, it is the line between "something connects this to the
+ * Low on purpose 閳?it is not a quality bar, it is the line between "something connects this to the
  * question" and "this is the recency and topic background that every node shares". A retriever that
  * returns every node has perfect recall and tells a learner nothing.
  */
@@ -140,8 +140,8 @@ export interface ScoredCandidate {
 /**
  * A retriever that can explain its own ranking.
  *
- * Separate from `Retriever` because explanation is not something every strategy can offer — a lexical
- * retriever has matched terms but no contributions — and widening the base interface would force every
+ * Separate from `Retriever` because explanation is not something every strategy can offer 閳?a lexical
+ * retriever has matched terms but no contributions 閳?and widening the base interface would force every
  * implementation to fake one. A caller that wants reasons asks for them explicitly.
  */
 export interface ExplainingRetriever extends Retriever {
@@ -198,8 +198,8 @@ export class LexicalGraphRetriever implements Retriever {
 /**
  * Shared candidate gathering for the retrievers.
  *
- * Every retriever must see candidates filtered the same way — drafts and retracted nodes excluded, node
- * types honoured — or two strategies would answer subtly different questions and could not be compared.
+ * Every retriever must see candidates filtered the same way 閳?drafts and retracted nodes excluded, node
+ * types honoured 閳?or two strategies would answer subtly different questions and could not be compared.
  *
  * Lexical matching is used as a *prefilter* only when no semantic signal is available. With embeddings
  * that would be wrong: a candidate sharing no words with the question is exactly the case semantic
@@ -225,7 +225,10 @@ function gatherCandidates(
   })
 
   const text = query.text ?? ''
-  const terms = termsOf(text)
+  // Lexicon-aware, so a Chinese question produces lexical seeds too. With a plain whitespace split the whole
+  // question arrived as one token, matched nothing, and left the lexical signal permanently at zero for CJK
+  // queries 閳?a bilingual interface over a monolingual retriever.
+  const terms = retrievalTokens(text)
   const lexicalSeedIds = new Set(
     terms.length === 0
       ? all.map((node) => node.id)
@@ -423,14 +426,14 @@ async function scoreSemantically(
    *
    * Measured from the candidates themselves: a query either lands on one or two nodes and leaves the
    * rest near zero, or it lands on nothing and leaves *everything* near zero. Taking a fraction of the
-   * strongest match handles both without a constant, and the alternative — an absolute threshold — was
+   * strongest match handles both without a constant, and the alternative 閳?an absolute threshold 閳?was
    * wrong twice while building this: at 0.2 it dropped real paraphrases, and at any value low enough to
    * keep them it admitted the hash-collision noise that made an unrelated question return six claims.
    */
   // Whether the query is *about* anything in the graph at all, judged once from its strongest match.
   const semanticIsMeaningful = strongestSimilarity(vectors, queryVector) >= SEMANTIC_MATCH_THRESHOLD
 
-  const terms = termsOf(text)
+  const terms = retrievalTokens(text)
   const branchId =
     context === undefined ? undefined : context.log.currentBranch(query.actorId ?? graph.actorId).id
   const newest = newestCreatedAt(candidates.map((entry) => entry.node))
@@ -450,8 +453,7 @@ async function scoreSemantically(
     if (queryVector !== undefined && wants('semantic') && semanticIsMeaningful) {
       const vector = vectors.get(node.id)
       const similarity = vector === undefined ? 0 : similaritySignal(queryVector, vector)
-      // An incidental match — a query term that appears in a node without the node being *about* it —
-      // must not be reported as semantic relevance. There was a case of exactly this: a claim about token
+      // An incidental match 閳?a query term that appears in a node without the node being *about* it 閳?      // must not be reported as semantic relevance. There was a case of exactly this: a claim about token
       // indices carried the tag `state:active`, the question contained "capital", and the sharing of the
       // token "active" was enough to look like meaning.
       const lexicalOnly = matchedTerms.length > 0 && similarity < SEMANTIC_MATCH_THRESHOLD
@@ -488,8 +490,8 @@ async function scoreSemantically(
 
     // Recency is never a reason on its own.
     //
-    // It is the weakest signal by design — a correction made a year ago may still be the most relevant
-    // thing there is — so a node whose *only* contribution is recency has nothing to do with the question
+    // It is the weakest signal by design 閳?a correction made a year ago may still be the most relevant
+    // thing there is 閳?so a node whose *only* contribution is recency has nothing to do with the question
     // and must not be reported as relevant. Without this rule, an unrelated question returned a claim
     // scoring exactly the minimum, on recency alone. Only applied when the caller supplied text, because
     // a tag-only query has no text to match and is legitimately served by the structural signals.
@@ -552,7 +554,7 @@ async function embedWithCache(
  *
  * The value is calibrated against measured cases rather than guessed:
  *
- * - a genuine paraphrase of a stored claim scores `0.34`–`0.51`
+ * - a genuine paraphrase of a stored claim scores `0.34`閳ユ彵0.51`
  * - an unrelated question peaks at `0.14`, from hash collisions between unrelated tokens
  *
  * A query whose best match is below this contributes no semantic evidence, so an unrelated question
@@ -636,7 +638,7 @@ function recencyValue(node: GraphNode, oldest: number, newest: number): number {
  * - **Low confidence** means the ground is not solid, so re-surfacing it is useful rather than redundant.
  *
  * A claim the learner already holds with high confidence *and* good articulation is the least useful to
- * re-surface, and this signal scores it low — which is the opposite of a naive "strongly held is
+ * re-surface, and this signal scores it low 閳?which is the opposite of a naive "strongly held is
  * relevant" rule, and the reason state is worth consulting at all.
  */
 export function cognitiveValue(
@@ -647,8 +649,8 @@ export function cognitiveValue(
 ): number {
   if (actorId === undefined) return 0
 
-  // A branch narrows the read to one line of inquiry. Without one — retrieval that is not scoped to a
-  // branch — the unqualified read is correct, and passing `branchId: undefined` explicitly is not the
+  // A branch narrows the read to one line of inquiry. Without one 閳?retrieval that is not scoped to a
+  // branch 閳?the unqualified read is correct, and passing `branchId: undefined` explicitly is not the
   // same thing as omitting it.
   const state =
     branchId === undefined
@@ -753,7 +755,7 @@ function toResult(query: RetrieveQuery, scored: readonly ScoredCandidate[]): Ret
 
   return Object.freeze({
     query: coreQuery,
-    terms: termsOf(query.text ?? ''),
+    terms: retrievalTokens(query.text ?? ''),
     matches: Object.freeze(matches),
     neighbors: Object.freeze(neighbors),
     nodes: Object.freeze(nodes),

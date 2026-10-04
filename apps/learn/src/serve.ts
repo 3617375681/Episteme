@@ -14,17 +14,16 @@ const server = await startLearnServer({ port })
 process.stdout.write(
   `\nEPISTEME · Learn\n` +
     `\n  ${server.url}\n` +
-    `\n  A local surface over your own cognitive graph. Everything you record is written to disk and\n` +
-    `  survives closing this process. Loopback only: there is no authentication, so there is nothing\n` +
-    `  here to expose to a network.\n` +
-    `\n  Ctrl+C to stop.\n\n`,
+    `\n  这是你自己认知图谱上的一个本地界面。你记录的一切都会写入磁盘，关掉进程也不会丢。\n` +
+    `  只监听本机回环地址：这里没有身份验证，所以没有什么是可以暴露到网络上的。\n` +
+    `\n  按 Ctrl+C 停止。\n\n`,
 )
 
 let stopping = false
 const stop = (): void => {
   if (stopping) return
   stopping = true
-  process.stdout.write('\nSaved. Everything you recorded is on disk.\n')
+  process.stdout.write('\n已保存。你记录的所有内容都在磁盘上。\n')
   server
     .close()
     .then(() => process.exit(0))

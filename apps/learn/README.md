@@ -23,6 +23,23 @@ The fourth step is the point. Before anything is recorded the answer has to esta
 it starts from what you said you understood. The interface shows the two answers side by side, so the
 change is a comparison rather than a claim.
 
+## Language
+
+**The interface is Simplified Chinese with the English term alongside.** `AGENTS.md` requires Simplified
+Chinese for user-facing prose and English for code, and both are carried in the payload rather than
+translated in a view — a dimension whose Chinese name disagreed with its English one would be a correctness
+problem, not a cosmetic one.
+
+You can ask in Chinese or in English. The seeded labels are bilingual (`自注意力（Self-Attention）`), and the
+deterministic embedding adapter has a Chinese lexicon that maps Chinese terms onto the same vocabulary as the
+English one, so **one graph serves a bilingual learner rather than two parallel stores**.
+
+That last part was a real defect, and it is worth knowing about because of how it presented: with a Chinese
+question, **every result sat at exactly the recency floor and no semantic signal fired at all**. The tokenizer
+split on characters that are not letters, Chinese has no spaces, so the whole question arrived as one token
+and matched nothing. A bilingual interface over a monolingual retriever is worse than either alone — it looks
+like it works and quietly returns nothing. See `tests/chinese-retrieval.test.ts`.
+
 ## Why this exists
 
 Phases 0–2 proved the machinery: append-only history, actor isolation, fork lineage, persistence, restart
@@ -95,6 +112,27 @@ become commands, with a test that asks every one of them as a question.
 **Generated node ids were label slugs truncated mid-word**, producing
 `node_0_self_attention_cannot_tell_which_word_ca`, which the learner was then asked to type to record their
 understanding. Ids are now `claim_1`, `concept_3`, and references resolve by unambiguous prefix.
+
+A third came from the Chinese work: **a Chinese question produced no semantic signal at all** (see
+[Language](#language)), and Chinese particles like `的` and `是` initially became match terms — the same
+failure as `"the"` and `"in"`, which surfaced as a hard negative outranking the expected node in four of six
+evaluation cases.
+
+## Why the answer text is Chinese and the code is not
+
+`learnerResponder` in `@episteme/domain-learn` stays English, because that package's demos, tests and docs are
+English. `apps/learn/src/responder.ts` is the Chinese counterpart, and it reproduces the same **three
+structural branches** rather than rewording the English ones:
+
+| situation                           | what the answer does                                           |
+| ----------------------------------- | -------------------------------------------------------------- |
+| nothing recorded                    | establishes the ground — it cannot build on what is not there  |
+| something recorded, nothing settled | asks the learner to commit to part of it                       |
+| an unresolved conflict              | refuses to build on a position the learner marked as contested |
+| settled understanding               | starts from it and skips the groundwork                        |
+
+Keeping the structure identical is what makes the swap safe: a change that altered the branches would change
+what the system is _willing to do_, not just what it says. A test asserts each branch.
 
 ## Verifying the interface
 

@@ -1,3 +1,4 @@
+import { isStopWord } from '../retrieval/index.js'
 import type { EmbeddingAdapter, Vector } from './index.js'
 
 /**
@@ -140,6 +141,209 @@ export function tokensOf(text: string): readonly string[] {
 }
 
 /**
+ * Chinese terms mapped onto the English vocabulary the lexicon already knows.
+ *
+ * This exists because of a defect that only appeared once learners were given a Chinese interface: a Chinese
+ * question produced **no semantic signal at all**. Every result sat at exactly the recency floor, because
+ * `tokensOf` splits on non-letter characters and Chinese has no spaces — the whole question arrived as one
+ * token, shared no vocabulary with any English label, and scored zero against everything.
+ *
+ * A bilingual interface over a monolingual retriever is worse than either alone: it looks like it works and
+ * quietly returns nothing.
+ *
+ * Matching is **longest-first**, so `位置编码` resolves as one term rather than as `位置` plus `编码`, which
+ * would lose the compound's meaning. Values are the same canonical tokens `EXPANDED_TERMS` uses, so a Chinese
+ * question and an English one land in the same place in the vector space. That is also why a Chinese question
+ * can retrieve an English-labelled node and the reverse.
+ */
+export const CHINESE_TERMS: Readonly<Record<string, readonly string[]>> = {
+  // Order, position and sequence.
+  顺序: ['order', 'sequence', 'position', 'index'],
+  次序: ['order', 'sequence', 'position', 'index'],
+  序列: ['order', 'sequence', 'position', 'index'],
+  位置: ['order', 'sequence', 'position', 'index'],
+  位置编码: ['order', 'sequence', 'position', 'index', 'encode'],
+  绝对位置: ['absolute', 'index'],
+  相对位置: ['relative', 'rope'],
+  相对: ['relative', 'rope'],
+  第几: ['order', 'sequence', 'position', 'index'],
+  先后: ['order', 'sequence', 'position', 'index'],
+  排序: ['order', 'sequence', 'position', 'index'],
+  排列: ['permutation', 'invariance', 'shuffle'],
+  置换: ['permutation', 'invariance'],
+  置换不变性: ['permutation', 'invariance'],
+  不变: ['invariance'],
+  不变性: ['permutation', 'invariance'],
+  打乱: ['permutation', 'invariance', 'shuffle'],
+
+  // Attention.
+  注意力: ['attention', 'self-attention', 'token'],
+  自注意力: ['attention', 'self-attention', 'token'],
+  注意力头: ['attention', 'head'],
+  多头: ['attention', 'head'],
+  头: ['attention', 'head'],
+
+  // Encoding and representation.
+  编码: ['encode', 'representation', 'inject'],
+  表示: ['encode', 'representation', 'inject'],
+  注入: ['encode', 'representation', 'inject'],
+  加上: ['encode', 'representation', 'inject'],
+  叠加: ['encode', 'representation', 'inject'],
+  旋转: ['relative', 'rotation', 'rope'],
+  旋转位置编码: ['relative', 'rotation', 'rope'],
+
+  // Tokens and input.
+  词: ['token', 'word', 'input'],
+  词元: ['token', 'word', 'input'],
+  输入: ['token', 'word', 'input'],
+  字符: ['token', 'word', 'input'],
+
+  // Architecture.
+  模型: ['transformer', 'model', 'architecture'],
+  架构: ['transformer', 'model', 'architecture'],
+  变压器: ['transformer', 'model', 'architecture'],
+
+  // Questions and reasons.
+  为什么: ['why', 'reason', 'necessary'],
+  原因: ['why', 'reason', 'necessary'],
+  为何: ['why', 'reason', 'necessary'],
+  需要: ['why', 'reason', 'necessary', 'need'],
+  必须: ['why', 'reason', 'necessary', 'need'],
+
+  // Verbs that carry meaning in a question.
+  知道: ['encode', 'representation'],
+  告诉: ['encode', 'representation', 'inject'],
+  区分: ['order', 'sequence'],
+  丢失: ['order', 'sequence', 'invariance'],
+  丢失了: ['order', 'sequence', 'invariance'],
+  处理: ['encode', 'representation'],
+  理解: ['encode', 'representation'],
+  影响: ['why', 'reason'],
+}
+
+/**
+ * Splits text into tokens **for retrieval**, applying the stop list and the Chinese lexicon.
+ *
+ * This is the function a retriever should use. `lexiconTokens` alone segments both languages but does not
+ * filter, and using it directly produced a real regression: `"in"`, `"the"` and `"to"` became match terms, so
+ * `"What is the capital of Portugal?"` matched two claims through the word "the" and a hard negative outranked
+ * the expected node in four of six evaluation cases.
+ *
+ * The lesson is in the composition rather than either part: segmentation without filtering is not the same
+ * lexical signal the retriever had before, and swapping one for the other silently changed what counts as a
+ * match.
+ */
+export function retrievalTokens(text: string): readonly string[] {
+  return lexiconTokens(text).filter((token) => !isStopWord(token) && !CHINESE_STOP_WORDS.has(token))
+}
+
+/**
+ * Chinese words that carry no retrieval signal.
+ *
+ * Chinese has no spaces, so a question arrives as segmented words and the particles survive segmentation —
+ * `的`, `是`, `在` would otherwise become match terms exactly as `"the"` and `"in"` did for English.
+ */
+export const CHINESE_STOP_WORDS: ReadonlySet<string> = new Set([
+  '的',
+  '了',
+  '是',
+  '在',
+  '和',
+  '与',
+  '就',
+  '都',
+  '也',
+  '还',
+  '很',
+  '会',
+  '能',
+  '要',
+  '把',
+  '被',
+  '让',
+  '给',
+  '对',
+  '为',
+  '以',
+  '及',
+  '或',
+  '而',
+  '之',
+  '它',
+  '他',
+  '我',
+  '你',
+  '这',
+  '那',
+  '哪',
+  '什么',
+  '怎么',
+  '如何',
+  '多少',
+  '一个',
+  '一下',
+  '到底',
+  '其实',
+  '可以',
+  '是否',
+])
+
+/**
+ * Splits text into tokens, segmenting CJK runs against the Chinese lexicon by longest match.
+ *
+ * Latin text keeps the whitespace-and-punctuation split. CJK runs are matched longest-first, and any
+ * character not covered is kept as its own token so an unknown word still contributes something rather than
+ * being dropped. Filtering is **not** applied here — a tokenizer that also decides relevance is two concerns
+ * in one function; use `retrievalTokens` when you want the retrieval signal.
+ */
+export function lexiconTokens(text: string): readonly string[] {
+  const lower = text.toLowerCase()
+  const out: string[] = []
+
+  // A CJK run is a maximal sequence of CJK characters, optionally with a parenthesised Latin gloss between
+  // them — which is exactly how the seeded labels are written, e.g. `自注意力（Self-Attention）`.
+  const segments = lower.split(/([\u3400-\u9fff\u3040-\u30ff]+)/u)
+
+  for (const segment of segments) {
+    if (segment === '') continue
+    if (!/[\u3400-\u9fff\u3040-\u30ff]/u.test(segment)) {
+      out.push(...tokensOf(segment))
+      continue
+    }
+    out.push(...segmentChinese(segment))
+  }
+
+  return out
+}
+
+/** Longest-match segmentation of one CJK run against the Chinese lexicon. */
+function segmentChinese(run: string): readonly string[] {
+  const out: string[] = []
+  let index = 0
+  while (index < run.length) {
+    let matched = ''
+    // Longest first, so a compound beats its parts.
+    for (let length = Math.min(8, run.length - index); length >= 2; length -= 1) {
+      const candidate = run.slice(index, index + length)
+      if (CHINESE_TERMS[candidate] !== undefined) {
+        matched = candidate
+        break
+      }
+    }
+    out.push(matched === '' ? (run[index] ?? '') : matched)
+    index += matched === '' ? 1 : matched.length
+  }
+  return out
+}
+
+/** The vocabulary a token should be compared in, spanning both languages. */
+export function lexiconTermsOf(token: string): readonly string[] {
+  const chinese = CHINESE_TERMS[token]
+  if (chinese !== undefined) return [token, ...chinese]
+  return expandedTermsOf(token)
+}
+
+/**
  * A deterministic, provider-free embedding adapter.
  *
  * L2-normalised so cosine similarity is a plain dot product, and unweighted across dimensions: the
@@ -162,8 +366,8 @@ export class DeterministicEmbeddingAdapter implements EmbeddingAdapter {
   embed(text: string): Promise<Vector> {
     const vector = new Array<number>(this.dimensions).fill(0)
 
-    for (const token of tokensOf(text)) {
-      for (const term of expandedTermsOf(token)) {
+    for (const token of lexiconTokens(text)) {
+      for (const term of lexiconTermsOf(token)) {
         const slot = hashToken(term) & (this.dimensions - 1)
         vector[slot] = (vector[slot] ?? 0) + 1
       }

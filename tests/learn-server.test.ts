@@ -39,8 +39,9 @@ async function post(path: string, body: unknown): Promise<{ status: number; body
 /**
  * Reads a field the test has asserted is present.
  *
- * Failing loudly beats returning `undefined`: an assertion that silently accepted a missing field would
- * defeat the purpose of testing the wire shape at all.
+ * Throws when the value is `undefined` rather than returning it. Returning `undefined` makes a missing
+ * field surface later as `Cannot read properties of undefined`, which points at the assertion instead of at
+ * the missing key — the failure message stops being about the wire shape the test exists to check.
  */
 function field<T>(body: Json, key: string): T {
   const value = body[key]
@@ -102,11 +103,15 @@ describe('the state endpoint', () => {
     const { status, body } = await get('/api/state')
     expect(status).toBe(200)
 
-    expect(field<{ title: string }>(body, 'topic').title).toBe('How transformers handle order')
+    expect(field<{ title: string }>(body, 'topic').title).toBe('Transformer 如何处理顺序')
     expect(list(body, 'nodes').length).toBeGreaterThan(0)
     expect(list<{ id: string }>(body, 'dimensions').map((dimension) => dimension.id)).toContain(
       'confidence',
     )
+    // The learner-facing labels travel with the payload, so a view never has to invent a translation.
+    expect(
+      list<{ labelZh: string }>(body, 'dimensions').map((dimension) => dimension.labelZh),
+    ).toContain('确信程度')
     expect(list<{ signal: string }>(body, 'rules').map((rule) => rule.signal)).toContain('semantic')
     expect(field<string>(body, 'retriever')).toBe('hybrid')
   })
@@ -135,9 +140,16 @@ describe('the ask endpoint', () => {
     expect(field<boolean>(body, 'usedContext')).toBe(false)
 
     // Every reason carries the arithmetic, so the page can show why a node sits where it does rather than
-    // asking the learner to trust a number.
+    // asking the learner to trust a number. Both languages travel together: a page that had to translate
+    // could drift from the scoring it is explaining.
     const ranked = list<{
-      reasons: readonly { contribution: number; weight: number; explanation: string }[]
+      reasons: readonly {
+        contribution: number
+        weight: number
+        explanation: string
+        explanationZh: string
+        labelZh: string
+      }[]
     }>(body, 'ranked')
     expect(ranked.length).toBeGreaterThan(0)
     for (const entry of ranked) {
@@ -145,6 +157,8 @@ describe('the ask endpoint', () => {
         expect(typeof reason.contribution).toBe('number')
         expect(typeof reason.weight).toBe('number')
         expect(reason.explanation.length).toBeGreaterThan(0)
+        expect(reason.explanationZh.length).toBeGreaterThan(0)
+        expect(reason.labelZh.length).toBeGreaterThan(0)
       }
     }
   })
@@ -162,6 +176,42 @@ describe('the ask endpoint', () => {
       body: JSON.stringify([1, 2, 3]),
     })
     expect(response.status).toBe(500)
+  })
+})
+
+describe('adding the learner\u2019s own nodes', () => {
+  it('adds a claim of the learner\u2019s own and it becomes retrievable', async () => {
+    const created = await post('/api/claim', {
+      label: '顺序信息在自注意力里完全丢失了',
+      kind: 'claim',
+    })
+    expect(created.status).toBe(200)
+    // `field` reads the top-level key, so this is the node itself — not `body.node.node`.
+    const node = field<{ nodeId: string; type: string; tier: string }>(created.body, 'node')
+
+    // A claim the learner writes is their own thinking, so it is `thought` tier — not `reference`, and not
+    // `draft`. The distinction decides whether it counts as understanding at all.
+    expect(node.type).toBe('claim')
+    expect(node.tier).toBe('thought')
+    expect(node.nodeId).toBe('claim_1')
+
+    const { body } = await post('/api/ask', { question: '顺序信息在自注意力里会丢失吗' })
+    expect(list<{ nodeId: string }>(body, 'ranked').map((entry) => entry.nodeId)).toContain(
+      node.nodeId,
+    )
+  })
+
+  it('treats a concept as shared reference material rather than the learner\u2019s claim', async () => {
+    const created = await post('/api/claim', { label: '相对位置编码', kind: 'concept' })
+    const node = field<{ type: string; tier: string }>(created.body, 'node')
+
+    expect(node.type).toBe('concept')
+    expect(node.tier).toBe('reference')
+  })
+
+  it('refuses an empty label', async () => {
+    const { status } = await post('/api/claim', { label: '   ' })
+    expect(status).toBe(500)
   })
 })
 

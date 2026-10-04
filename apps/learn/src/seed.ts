@@ -28,26 +28,33 @@ export interface SeedTopic {
   readonly edges: readonly { readonly from: string; readonly to: string; readonly type: string }[]
 }
 
+/**
+ * Labels are Simplified Chinese with the English term in parentheses.
+ *
+ * The learner reads Chinese; the project's readers and the literature use the English terms. Carrying both
+ * in one label serves both without a translation layer, and it keeps the *node* a single shared concept,
+ * which is the point of the graph. A bilingual node is still one node.
+ */
 export const TRANSFORMERS: SeedTopic = {
   id: 'topic:transformer',
-  title: 'How transformers handle order',
+  title: 'Transformer 如何处理顺序',
   about:
-    'The part of the transformer architecture that concerns sequence order: why attention alone cannot represent it, and what is added to fix that.',
+    'Transformer 架构中与序列顺序有关的部分：为什么仅靠注意力无法表达顺序，以及为此加入了什么。',
   source: 'paper:arxiv:1706.03762',
 
   concepts: [
     { id: 'c_transformer', label: 'Transformer' },
-    { id: 'c_self_attention', label: 'Self-Attention' },
-    { id: 'c_positional_encoding', label: 'Positional Encoding' },
-    { id: 'c_permutation_invariance', label: 'Permutation Invariance' },
-    { id: 'c_rope', label: 'RoPE (Rotary Position Embedding)' },
-    { id: 'c_attention_head', label: 'Attention Head' },
+    { id: 'c_self_attention', label: '自注意力（Self-Attention）' },
+    { id: 'c_positional_encoding', label: '位置编码（Positional Encoding）' },
+    { id: 'c_permutation_invariance', label: '置换不变性（Permutation Invariance）' },
+    { id: 'c_rope', label: 'RoPE（旋转位置编码）' },
+    { id: 'c_attention_head', label: '注意力头（Attention Head）' },
   ],
 
   questions: [
-    { id: 'q_why_order', label: 'Why does a transformer need to be told about sequence order?' },
-    { id: 'q_how_position', label: 'How is position information given to the model?' },
-    { id: 'q_heads', label: 'How many attention heads should I use?' },
+    { id: 'q_why_order', label: '为什么 Transformer 必须被告知序列顺序？' },
+    { id: 'q_how_position', label: '位置信息是怎么给到模型的？' },
+    { id: 'q_heads', label: '应该用多少个注意力头？' },
   ],
 
   edges: [

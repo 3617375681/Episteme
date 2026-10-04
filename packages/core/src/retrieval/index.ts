@@ -207,6 +207,17 @@ export function retrieve(
 }
 
 /**
+ * Whether a token carries no retrieval signal.
+ *
+ * Exported so a second tokenizer — the Chinese-aware one — can apply the *same* stop list instead of
+ * inventing its own. Two stop lists would mean two different notions of "does this match", which is how a
+ * lexical signal silently changes meaning when a tokenizer is swapped.
+ */
+export function isStopWord(token: string): boolean {
+  return STOP_WORDS.has(token)
+}
+
+/**
  * Terms found in a node's label, tags and id.
  *
  * Exported because lexical overlap is one relevance signal among several, and a hybrid retriever must

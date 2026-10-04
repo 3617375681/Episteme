@@ -564,6 +564,118 @@
         font-size: 11.5px;
         color: var(--ink);
       }
+
+      /* Chinese is primary for the learner; English is kept beside it because the project's audience
+         includes people reading the code. `.en` is quiet enough not to compete. */
+      .en {
+        display: block;
+        font-size: 11.5px;
+        color: var(--faint);
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        margin-top: 2px;
+      }
+      h2 .en {
+        font-size: 11px;
+      }
+      /* English beside a Chinese label rather than under it, for tight places like a dimension name. */
+      .en-inline {
+        font-size: 10.5px;
+        color: var(--faint);
+        font-weight: 400;
+      }
+
+      /* Adding your own node: the graph has to be the learner's, not only the seeded topic. */
+      .addnode {
+        margin-bottom: 11px;
+        display: grid;
+        gap: 6px;
+      }
+      .addnode input {
+        width: 100%;
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        outline: none;
+      }
+      .addnode input:focus {
+        border-color: var(--teal);
+        box-shadow: 0 0 0 3px var(--teal-soft);
+      }
+      .addrow {
+        display: flex;
+        gap: 6px;
+      }
+      .addrow button {
+        flex: 1;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 8px;
+        cursor: pointer;
+        background: var(--card);
+        color: var(--ink);
+        border: 1px solid #cfd5da;
+        border-radius: 7px;
+      }
+      .addrow button:hover {
+        border-color: var(--teal);
+        color: var(--teal);
+      }
+
+      /* Recording from the card itself: the previous flow made the learner find the node again in the
+         sidebar, which is the kind of small friction that stops a loop from being repeated. */
+      .quick {
+        margin: 10px 0 0 56px;
+        padding-top: 9px;
+        border-top: 1px dashed var(--line);
+        display: grid;
+        gap: 5px;
+        cursor: default;
+      }
+      .quick .quickrow {
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        gap: 9px;
+        align-items: center;
+      }
+      .quick .quickname {
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .quick .quicklevels {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .quick button {
+        font: inherit;
+        font-size: 11.5px;
+        padding: 3px 9px;
+        cursor: pointer;
+        background: #fff;
+        color: var(--ink);
+        border: 1px solid #d7dce1;
+        border-radius: 6px;
+      }
+      .quick button:hover {
+        border-color: var(--teal);
+        color: var(--teal);
+      }
+      .quick button.on {
+        background: var(--teal);
+        color: #fff;
+        border-color: var(--teal);
+        font-weight: 600;
+      }
+      .quick .openhint {
+        font-size: 11.5px;
+        color: var(--warn);
+      }
     </style>
   </head>
   <body>
@@ -582,9 +694,9 @@
           type="text"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Ask something about this topic — in your own words."
+          placeholder="用自己的话问一个关于这个主题的问题"
         />
-        <button id="go">Ask</button>
+        <button id="go">提问</button>
       </div>
       <div class="hints" id="hints"></div>
 
@@ -594,18 +706,15 @@
         <main>
           <div id="result">
             <div class="intro">
-              <h3>Ask a question about this topic.</h3>
+              <h3>就这个主题问一个问题<span class="en">Ask a question about this topic</span></h3>
               <p>
-                Episteme retrieves whatever in your own graph is relevant, shows which signals put
-                each item where it is, and answers from what you have already recorded. Then you say
-                how well you understand something, and ask again.
+                Episteme 会从你自己的认知图谱里取回相关内容，逐个信号显示每一项为什么排在那里，
+                并基于你已经记录过的理解来回答。然后你说出自己理解到什么程度，再问一次。
               </p>
               <ol>
-                <li>The answer before you record anything has to establish the ground.</li>
-                <li>Recording understanding appends an event; nothing is overwritten.</li>
-                <li>
-                  The next answer is re-derived from it, and the difference is shown side by side.
-                </li>
+                <li>在你记录任何东西之前，回答必须先打下地基。</li>
+                <li>记录理解是往只增不改的历史里追加一个事件，不会覆盖任何东西。</li>
+                <li>下一个回答会从这条记录重新推导出来，前后差异并排展示。</li>
               </ol>
             </div>
           </div>
@@ -613,26 +722,43 @@
 
         <aside>
           <section>
-            <h2>Record your understanding</h2>
+            <h2>记录你的理解<span class="en">Record your understanding</span></h2>
             <div id="record">
               <div class="placeholder" style="padding: 18px 16px; font-size: 13px">
-                Pick something from the results or the graph, then say how well you understand it.
-                That record is what changes the next answer.
+                先从结果或图谱里点一个节点，再说出你理解到什么程度。改变下一个回答的，就是这条记录。
               </div>
             </div>
           </section>
 
           <section>
-            <h2>Your graph</h2>
+            <h2>你的图谱<span class="en">Your graph</span></h2>
+            <form class="addnode" id="addform">
+              <input
+                id="newclaim"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="写下你自己的一个论断或问题"
+              />
+              <div class="addrow">
+                <button type="submit" data-kind="claim">加为论断</button>
+                <button type="submit" data-kind="question">加为问题</button>
+              </div>
+            </form>
             <div class="nodes" id="nodes"></div>
           </section>
 
+          <section id="opensection" hidden>
+            <h2>还没收尾的线索<span class="en">Open lines of inquiry</span></h2>
+            <div class="nodes" id="openends"></div>
+          </section>
+
           <details class="legend">
-            <summary>How relevance is decided</summary>
+            <summary>相关度是怎么决定的<span class="en">How relevance is decided</span></summary>
             <div class="grid" id="legend"></div>
             <p style="margin: 12px 0 0">
-              All five signals are within a factor of two of each other, so no single one decides a
-              ranking — that is deliberate. See <code>docs/architecture/retrieval.md</code>.
+              五个信号的权重彼此相差不超过一倍，所以没有任何一个能单独决定排序 —— 这是刻意的。 详见
+              <code>docs/architecture/retrieval.md</code>。
             </p>
           </details>
         </aside>
@@ -671,6 +797,53 @@
         return payload
       }
 
+      /**
+       * Chinese is primary for the learner; English is kept beside it because the project's audience
+       * includes people reading the code. Kept in one object rather than scattered through the render
+       * functions, so a missing string is visible rather than silently English.
+       */
+      const ZH = {
+        ask: '问一个关于这个主题的问题',
+        retrieved: '检索到的内容，按相关度排序',
+        nothingRelevant: '你的图谱里没有任何东西和这个问题相关。这本身也是一个答案。',
+        whatChanged: '改变了什么',
+        beforeRecord: '在你记录之前',
+        afterRecord: '记录之后',
+        recordUnderstanding: '记录你的理解',
+        yourGraph: '你的图谱',
+        openEnds: '还没收尾的线索',
+        noOpenEnds: '还没有没收尾的线索 —— 记录一条，就会出现',
+        directMatch: '直接命中',
+        viaGraph: '通过图谱走到',
+        youRecorded: '你记录的',
+        notRecorded: '你还没有记录过它',
+        recordThis: '记录一项',
+        leading: '改变下一个回答的，就是这条记录',
+        addClaim: '加为论断',
+        addQuestion: '加为问题',
+        added: '已加入：',
+        emptyQuestion: '先写点什么再问。',
+        emptyClaim: '先写下你的论断。',
+        retrieveFailed: '检索失败',
+        recordFailed: '记录失败',
+        addFailed: '加入失败',
+        understoodBadge: (count) => `基于你记录过的 ${count} 项理解`,
+        nothingRecordedBadge: '你还没有记录过相关内容',
+        told: '它被告知的内容：',
+        nothingTold: '关于这个，你还没有记录过任何东西',
+        stats: (payload) =>
+          `${payload.nodes.length} 个节点 · ${payload.events} 条事件 · ${payload.openEnds.length} 条未收尾的线索 · 检索器 ${payload.retriever}`,
+        weight: (value, name) => `权重 ${value} —— ${name}`,
+      }
+
+      const EN_SIGNALS = {
+        semantic: 'how close in meaning the question is',
+        lexical: 'shared words',
+        graph: 'how close in the graph',
+        cognitive: 'what you have recorded about it',
+        recency: 'how recent',
+      }
+
       const fail = (message) => {
         $('error').innerHTML = ''
         $('error').appendChild(el('div', 'error', message))
@@ -696,19 +869,20 @@
         for (const rule of payload.rules) {
           $('legend').appendChild(el('code', null, rule.signal))
           $('legend').appendChild(
-            el('span', null, 'weight ' + rule.weight + ' — ' + describe(rule.signal)),
+            el('span', null, ZH.weight(rule.weight, EN_SIGNALS[rule.signal] || '')),
           )
         }
 
         renderNodes()
         renderRecord()
+        renderOpenEnds(payload.openEnds)
 
         $('hints').innerHTML = ''
-        $('hints').appendChild(el('span', 'lead', 'try:'))
+        $('hints').appendChild(el('span', 'lead', '试试：'))
         for (const prompt of [
-          'why is order hard for attention',
-          'what does positional encoding do',
-          'how does RoPE work',
+          '为什么注意力很难处理顺序',
+          '位置编码到底做了什么',
+          'RoPE 是怎么工作的',
         ]) {
           const button = el('button', null, prompt)
           button.addEventListener('click', () => {
@@ -721,29 +895,10 @@
 
       function renderStats(payload) {
         $('stats').innerHTML = ''
-        for (const text of [
-          payload.nodes.length + ' nodes',
-          payload.events + ' events',
-          payload.openEnds.length + ' open lines of inquiry',
-          'retriever: ' + payload.retriever,
-        ]) {
-          const span = el('span')
-          span.appendChild(el('span', 'dot'))
-          span.appendChild(document.createTextNode(text))
-          $('stats').appendChild(span)
-        }
-      }
-
-      function describe(signal) {
-        return (
-          {
-            semantic: 'how close in meaning the question is',
-            lexical: 'shared words',
-            graph: 'how close in the graph',
-            cognitive: 'what you have recorded about it',
-            recency: 'how recent',
-          }[signal] || signal
-        )
+        const span = el('span')
+        span.appendChild(el('span', 'dot'))
+        span.appendChild(document.createTextNode(ZH.stats(payload)))
+        $('stats').appendChild(span)
       }
 
       function renderNodes() {
@@ -761,8 +916,33 @@
         }
       }
 
+      /**
+       * The learner's open lines of inquiry.
+       *
+       * `tips` has existed since Phase 0 and was never shown anywhere. It answers "where did I leave off?",
+       * which is the question a learner actually has when they come back, and it is the reason the
+       * branch-versus-subject distinction was worth getting right.
+       */
+      function renderOpenEnds(openEnds) {
+        const section = $('opensection')
+        const host = $('openends')
+        host.innerHTML = ''
+        if (!openEnds || openEnds.length === 0) {
+          section.hidden = true
+          return
+        }
+        section.hidden = false
+        for (const end of openEnds) {
+          const row = el('div', 'node' + (state.selected === end.target ? ' on' : ''))
+          row.appendChild(el('span', 'k', 'open'))
+          row.appendChild(el('span', 'l', end.label))
+          row.addEventListener('click', () => select(end.target))
+          host.appendChild(row)
+        }
+      }
+
       const shortKind = (type) =>
-        ({ concept: 'concept', claim: 'claim', question: 'question' })[type] || type
+        ({ concept: '概念', claim: '论断', question: '问题' })[type] || type
 
       function select(nodeId) {
         state.selected = nodeId
@@ -789,7 +969,7 @@
         clearError()
         $('go').disabled = true
         $('result').innerHTML = ''
-        $('result').appendChild(el('div', 'loading', 'Retrieving…'))
+        $('result').appendChild(el('div', 'loading', '正在检索…'))
         try {
           const result = await api('/api/ask', { question })
           if (!keepBefore && result.question !== state.question) state.before = null
@@ -802,7 +982,7 @@
           renderRecord()
           await refreshGraph()
         } catch (error) {
-          fail(error.message)
+          fail(ZH.retrieveFailed + '：' + error.message)
           $('result').innerHTML = ''
         } finally {
           $('go').disabled = false
@@ -819,17 +999,13 @@
           el(
             'span',
             'badge ' + (result.usedContext ? 'used' : 'cold'),
-            result.usedContext
-              ? 'built on ' + result.known.length + ' thing(s) you recorded'
-              : 'nothing you recorded was relevant',
+            result.usedContext ? ZH.understoodBadge(result.known.length) : ZH.nothingRecordedBadge,
           ),
         )
         card.appendChild(el('p', null, result.answer))
         const basis = el('div', 'basis')
-        basis.appendChild(el('b', null, 'what it was told: '))
-        basis.appendChild(
-          document.createTextNode(result.summary || 'nothing recorded about this yet'),
-        )
+        basis.appendChild(el('b', null, ZH.told))
+        basis.appendChild(document.createTextNode(result.summary || ZH.nothingTold))
         card.appendChild(basis)
         answer.appendChild(card)
         host.appendChild(answer)
@@ -837,13 +1013,13 @@
         // The comparison, once a record has been made about this same question.
         if (state.before && state.before.answer !== result.answer) {
           const section = el('section')
-          section.appendChild(el('h2', null, 'What changed'))
+          section.appendChild(el('h2', null, ZH.whatChanged))
           const box = el('div', 'change')
           const beforeRow = el('div', 'row before')
-          beforeRow.appendChild(el('div', 'tagline', 'before you recorded it'))
+          beforeRow.appendChild(el('div', 'tagline', ZH.beforeRecord))
           beforeRow.appendChild(el('p', null, state.before.answer))
           const afterRow = el('div', 'row after')
-          afterRow.appendChild(el('div', 'tagline', 'after'))
+          afterRow.appendChild(el('div', 'tagline', ZH.afterRecord))
           afterRow.appendChild(el('p', null, result.answer))
           box.appendChild(beforeRow)
           box.appendChild(afterRow)
@@ -852,16 +1028,9 @@
         }
 
         const rankedSection = el('section')
-        const heading = el('h2', null, 'Retrieved, most relevant first')
-        rankedSection.appendChild(heading)
+        rankedSection.appendChild(el('h2', null, ZH.retrieved))
         if (result.ranked.length === 0) {
-          rankedSection.appendChild(
-            el(
-              'div',
-              'empty',
-              'Nothing in your graph is relevant to this. That is itself an answer.',
-            ),
-          )
+          rankedSection.appendChild(el('div', 'empty', ZH.nothingRelevant))
         }
         for (const entry of result.ranked) {
           rankedSection.appendChild(renderRanked(entry, result))
@@ -886,19 +1055,15 @@
         const meta = el('div', 'meta')
         meta.appendChild(
           document.createTextNode(
-            entry.type +
+            shortKind(entry.type) +
               ' · ' +
-              (entry.origin === 'match' ? 'direct match' : 'reached through the graph'),
+              (entry.origin === 'match' ? ZH.directMatch : ZH.viaGraph),
           ),
         )
         if (known) {
           meta.appendChild(document.createTextNode(' · '))
           meta.appendChild(
-            el(
-              'span',
-              'mine-tag',
-              'you recorded: ' + known.dimensions.map((d) => d.id + '=' + d.level).join(', '),
-            ),
+            el('span', 'mine-tag', ZH.youRecorded + '：' + describeState(known.dimensions)),
           )
         }
         card.appendChild(meta)
@@ -909,30 +1074,75 @@
           // is part of why a node is where it is, and dropping the row would hide that.
           const zero = reason.contribution <= 0
           const bar = el('div', 'bar sig-' + reason.signal + (zero ? ' zero' : ''))
-          bar.appendChild(el('span', 'name', reason.signal))
+          bar.appendChild(el('span', 'name', reason.labelZh))
           const track = el('div', 'track')
           const fill = el('div', 'fill')
           fill.style.width = Math.max(0, Math.min(100, reason.share * 100)).toFixed(1) + '%'
           track.appendChild(fill)
           bar.appendChild(track)
           bar.appendChild(el('span', 'pct', zero ? '—' : Math.round(reason.share * 100) + '%'))
-          bar.appendChild(el('span', 'why', reason.explanation))
+          bar.appendChild(el('span', 'why', reason.explanationZh))
           bars.appendChild(bar)
         }
         card.appendChild(bars)
+
+        // Record from the card itself. The first version required finding the node again in the sidebar,
+        // which is the kind of small friction that stops a loop from being repeated.
+        card.appendChild(renderQuickRecord(entry, known))
         return card
+      }
+
+      /** The four levels of one dimension, as buttons that record and re-ask on click. */
+      function renderQuickRecord(entry, known) {
+        const host = el('div', 'quick')
+        host.addEventListener('click', (event) => event.stopPropagation())
+
+        for (const dimension of state.dimensions) {
+          const row = el('div', 'quickrow')
+          row.appendChild(el('span', 'quickname', dimension.labelZh))
+          const levels = el('div', 'quicklevels')
+          const current = (known ? known.dimensions : []).find((item) => item.id === dimension.id)
+          for (const level of dimension.levels) {
+            const label = dimension.levelLabelsZh.find((item) => item.level === level)
+            const button = el(
+              'button',
+              current && current.level === level ? 'on' : null,
+              label ? label.label : level,
+            )
+            button.addEventListener('click', () => record(entry.nodeId, dimension.id, level))
+            levels.appendChild(button)
+          }
+          row.appendChild(levels)
+          host.appendChild(row)
+        }
+        return host
+      }
+
+      /** Renders recorded state in Chinese, e.g. `确信程度=低`. */
+      function describeState(dimensions) {
+        return dimensions
+          .map((item) => {
+            const dimension = state.dimensions.find((candidate) => candidate.id === item.id)
+            const name = dimension ? dimension.labelZh : item.id
+            const level = dimension
+              ? (dimension.levelLabelsZh.find((candidate) => candidate.level === item.level) || {})
+                  .label || item.level
+              : item.level
+            return name + '=' + level
+          })
+          .join('、')
       }
 
       function renderRecord() {
         const host = $('record')
         host.innerHTML = ''
         if (state.selected === null) {
-          host.appendChild(el('div', 'placeholder', 'Pick something first.'))
+          host.appendChild(el('div', 'placeholder', '先从结果或图谱里点一个节点。'))
           return
         }
         const node = state.nodes.find((item) => item.nodeId === state.selected)
         if (!node) {
-          host.appendChild(el('div', 'placeholder', 'Pick something first.'))
+          host.appendChild(el('div', 'placeholder', '先从结果或图谱里点一个节点。'))
           return
         }
 
@@ -946,46 +1156,77 @@
         for (const dimension of state.dimensions) {
           const wrap = el('div', 'dim')
           const head = el('div', 'dim-head')
-          head.appendChild(el('span', 'dim-name', dimension.label))
-          head.appendChild(el('span', 'dim-hint', dimension.description))
+          const name = el('span', 'dim-name', dimension.labelZh + ' ')
+          name.appendChild(el('span', 'en-inline', dimension.label))
+          head.appendChild(name)
+          head.appendChild(el('span', 'dim-hint', dimension.descriptionZh))
           wrap.appendChild(head)
 
           const levels = el('div', 'levels')
           const current = (node.understood || []).find((item) => item.id === dimension.id)
           for (const level of dimension.levels) {
-            const button = el('button', current && current.level === level ? 'on' : null, level)
-            button.addEventListener('click', () => record(dimension.id, level))
+            const label = dimension.levelLabelsZh.find((item) => item.level === level)
+            const button = el(
+              'button',
+              current && current.level === level ? 'on' : null,
+              label ? label.label : level,
+            )
+            button.addEventListener('click', () => record(node.nodeId, dimension.id, level))
             levels.appendChild(button)
           }
           wrap.appendChild(levels)
           dims.appendChild(wrap)
         }
         host.appendChild(dims)
-        host.appendChild(
-          el(
-            'div',
-            'note',
-            'Recording is a new event in an append-only history. Nothing is overwritten, and the answer above is re-derived from it.',
-          ),
-        )
+        host.appendChild(el('div', 'note', ZH.leading))
       }
 
-      async function record(dimension, level) {
+      /**
+       * Records understanding about a node.
+       *
+       * `target` is a parameter rather than read from `state.selected`, because the card's own buttons
+       * record about the card they are on — which may not be the selected node. Reading the selection here
+       * was the bug this signature prevents.
+       */
+      async function record(target, dimension, level) {
         clearError()
         // Captured before the write, so the comparison shows the answer as it was *before* this record.
         // The re-ask below is told to keep it.
         state.before = state.last
+        state.selected = target
         const question = state.question
         try {
           await api('/api/record', {
-            target: state.selected,
+            target,
             dimensions: { [dimension]: level },
             reason: 'recorded from the learn surface',
           })
           await refreshGraph()
           if (question) await runAsk(question, true)
         } catch (error) {
-          fail(error.message)
+          fail(ZH.recordFailed + '：' + error.message)
+        }
+      }
+
+      /** Adds the learner's own claim or question, so the graph is theirs rather than only the seed. */
+      async function addNode(kind) {
+        const input = $('newclaim')
+        const label = input.value.trim()
+        if (label === '') {
+          fail(ZH.emptyClaim)
+          return
+        }
+        clearError()
+        try {
+          const payload = await api('/api/claim', { label, kind })
+          input.value = ''
+          state.selected = payload.node.nodeId
+          await refreshGraph()
+          // The new node is what the learner was thinking about, so ask about it straight away.
+          $('q').value = label
+          await ask()
+        } catch (error) {
+          fail(ZH.addFailed + '：' + error.message)
         }
       }
 
@@ -1003,11 +1244,20 @@
         renderNodes()
         renderRecord()
         renderStats(payload)
+        renderOpenEnds(payload.openEnds)
       }
 
       $('go').addEventListener('click', ask)
       $('q').addEventListener('keydown', (event) => {
         if (event.key === 'Enter') ask()
+      })
+
+      $('addform').addEventListener('submit', (event) => {
+        event.preventDefault()
+        // The clicked button decides the kind, so one input serves both without a mode switch.
+        const kind =
+          event.submitter && event.submitter.dataset.kind === 'question' ? 'question' : 'claim'
+        addNode(kind)
       })
 
       // One request: the server attaches each node's recorded understanding, so the record panel never

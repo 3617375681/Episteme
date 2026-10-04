@@ -21,19 +21,20 @@ const DEFAULT_PATH = join(homedir(), '.episteme', 'learn.jsonl')
 interface Command {
   readonly name: string
   readonly usage: string
+  /** What the command does, in Simplified Chinese — the language the learner reads. */
   readonly help: string
 }
 
 const COMMANDS: readonly Command[] = [
-  { name: 'ask', usage: '<question>', help: 'ask a question; free text also works' },
-  { name: 'explain', usage: '[n]', help: 'show the ranked evidence behind the last answer' },
-  { name: 'record', usage: '<nodeId> <dimension> <level>', help: 'record what you now understand' },
-  { name: 'claim', usage: '<text>', help: 'add a claim of your own to the graph' },
-  { name: 'graph', usage: '', help: 'list everything in your graph' },
-  { name: 'open', usage: '', help: 'show the lines of inquiry you have left open' },
-  { name: 'dimensions', usage: '', help: 'list the dimensions you can record' },
-  { name: 'help', usage: '', help: 'show this list' },
-  { name: 'quit', usage: '', help: 'leave (everything is already saved)' },
+  { name: 'ask', usage: '<问题>', help: '提一个问题；直接输入文字也会被当成问题' },
+  { name: 'explain', usage: '[序号]', help: '展开上一个回答背后的排序依据' },
+  { name: 'record', usage: '<节点> <维度> <程度>', help: '记录你现在理解到什么程度' },
+  { name: 'claim', usage: '<文字>', help: '把你自己的一个论断加进图谱' },
+  { name: 'graph', usage: '', help: '列出你图谱里的全部节点' },
+  { name: 'open', usage: '', help: '显示你还没收尾的线索' },
+  { name: 'dimensions', usage: '', help: '列出可以记录的维度' },
+  { name: 'help', usage: '', help: '显示这份列表' },
+  { name: 'quit', usage: '', help: '离开（所有内容都已经保存）' },
 ]
 
 /**
@@ -128,8 +129,8 @@ export class LearnCli {
     const seed = await seedTopic(session)
     if (seed.seeded) {
       cli.#out.write(
-        `Seeded "${TRANSFORMERS.title}": ${seed.nodeCount} nodes, ${seed.edgeCount} links.\n` +
-          `No understanding is recorded yet — that part is yours.\n\n`,
+        `已载入起始主题「${TRANSFORMERS.title}」：${seed.nodeCount} 个节点、${seed.edgeCount} 条连接。\n` +
+          `还没有记录任何理解 —— 那部分是你的。\n\n`,
       )
     }
     return cli
@@ -165,7 +166,7 @@ export class LearnCli {
     if (command === 'ask') {
       const question = rest.join(' ').trim()
       if (question === '') {
-        this.#out.write('ask needs a question, e.g.  ask why is order hard for attention\n')
+        this.#out.write('ask 需要一个问题，例如：  ask 为什么注意力很难处理顺序\n')
         return true
       }
       await this.#ask(question)
@@ -219,20 +220,20 @@ export class LearnCli {
     this.#out.write(`\n${result.answer}\n`)
     this.#out.write(
       result.usedContext
-        ? `\n  built on ${result.known.length} thing(s) you had already recorded  [${result.retriever}]\n`
-        : `\n  nothing you had recorded was relevant, so this starts from the ground  [${result.retriever}]\n`,
+        ? `\n  基于你已经记录过的 ${result.known.length} 项理解  [${result.retriever}]\n`
+        : `\n  你记录过的内容都不相关，所以这个回答从头开始  [${result.retriever}]\n`,
     )
 
     if (result.ranked.length > 0) {
-      this.#out.write(`  retrieved, most relevant first:\n`)
+      this.#out.write(`  检索到的内容，按相关度排序：\n`)
       for (const entry of result.ranked.slice(0, 5)) {
         const why = entry.reasons[0]
         this.#out.write(
           `    ${entry.score.toFixed(3)}  ${entry.label}\n` +
-            `           ${entry.nodeId} · ${entry.type} · ${why === undefined ? 'no signals' : why.explanation}\n`,
+            `           ${entry.nodeId} · ${shortKind(entry.type)} · ${why === undefined ? '没有信号' : why.explanationZh}\n`,
         )
       }
-      this.#out.write(`  run "explain" for the full breakdown.\n`)
+      this.#out.write(`  输入 "explain" 可以看到完整的分解。\n`)
     }
     this.#out.write('\n')
   }
@@ -246,7 +247,7 @@ export class LearnCli {
   #printWhy(which?: string): void {
     const result = this.#lastAsk
     if (result === undefined) {
-      this.#out.write('nothing asked yet\n')
+      this.#out.write('还没有提过问题\n')
       return
     }
 
@@ -257,23 +258,23 @@ export class LearnCli {
         : result.ranked.slice(Math.max(0, index), Math.max(0, index) + 1)
 
     if (entries.length === 0) {
-      this.#out.write('nothing to explain\n')
+      this.#out.write('没有可以解释的内容\n')
       return
     }
 
-    this.#out.write(`\nwhy these were retrieved for: ${result.question}\n`)
+    this.#out.write(`\n这些内容为什么会被检索到：${result.question}\n`)
     this.#out.write(
-      `weights: ${result.rules.map((rule) => `${rule.signal}=${rule.weight}`).join('  ')}\n`,
+      `权重：${result.rules.map((rule) => `${rule.signal}=${rule.weight}`).join('  ')}\n`,
     )
 
     for (const entry of entries) {
       this.#out.write(`\n  ${entry.label}   [${entry.nodeId}]\n`)
-      this.#out.write(`    total ${entry.score.toFixed(4)}  (${entry.origin})\n`)
+      this.#out.write(`    合计 ${entry.score.toFixed(4)}  (${entry.origin})\n`)
       for (const reason of entry.reasons) {
         this.#out.write(
-          `      ${reason.signal.padEnd(10)} value ${reason.value.toFixed(3)} × weight ${reason.weight} = ` +
-            `${reason.contribution.toFixed(4)}  (${(reason.share * 100).toFixed(0)}% of total)\n` +
-            `      ${' '.repeat(10)} ${reason.explanation}\n`,
+          `      ${reason.signal.padEnd(10)} 取值 ${reason.value.toFixed(3)} × 权重 ${reason.weight} = ` +
+            `${reason.contribution.toFixed(4)}  (占 ${(reason.share * 100).toFixed(0)}%)\n` +
+            `      ${' '.repeat(10)} ${reason.explanationZh}\n`,
         )
       }
     }
@@ -283,7 +284,7 @@ export class LearnCli {
   async #record(args: readonly string[]): Promise<void> {
     const [reference, dimension, level] = args
     if (reference === undefined || dimension === undefined || level === undefined) {
-      this.#out.write('record needs a node, a dimension and a level, e.g.\n')
+      this.#out.write('record 需要一个节点、一个维度和一个程度，例如：\n')
       this.#out.write('  record claim_1 confidence low\n\n')
       this.#printDimensions()
       return
@@ -291,13 +292,13 @@ export class LearnCli {
 
     const known = RECORDABLE_DIMENSIONS.find((candidate) => candidate.id === dimension)
     if (known === undefined) {
-      this.#out.write(`"${dimension}" is not recordable here.\n\n`)
+      this.#out.write(`「${dimension}」不是这里可以记录的维度。\n\n`)
       this.#printDimensions()
       return
     }
     if (!known.levels.includes(level)) {
       this.#out.write(
-        `"${level}" is not a level of ${dimension}. Use one of: ${known.levels.join(', ')}\n`,
+        `「${level}」不是 ${dimension} 的合法取值。可用：${known.levels.join(', ')}\n`,
       )
       return
     }
@@ -306,11 +307,11 @@ export class LearnCli {
     // understanding to the wrong node, because a StateEvent is permanent.
     const matches = this.#session.resolveNodes(reference)
     if (matches.length === 0) {
-      this.#out.write(`No node matches "${reference}". Run "graph" to see what is there.\n`)
+      this.#out.write(`没有节点匹配「${reference}」。输入 "graph" 看看有什么。\n`)
       return
     }
     if (matches.length > 1) {
-      this.#out.write(`"${reference}" matches ${matches.length} nodes — be more specific:\n`)
+      this.#out.write(`「${reference}」匹配到 ${matches.length} 个节点 —— 请说得更具体：\n`)
       for (const match of matches) this.#out.write(`  ${match.nodeId}  ${match.label}\n`)
       return
     }
@@ -320,27 +321,51 @@ export class LearnCli {
 
     try {
       const result = await this.#session.record(target.nodeId, { [dimension]: level })
+      const describe = (entry: { id: string; level: string }): string => {
+        const definition = RECORDABLE_DIMENSIONS.find((candidate) => candidate.id === entry.id)
+        const name = definition ? definition.labelZh : entry.id
+        const label = definition
+          ? (definition.levelLabelsZh.find((candidate) => candidate.level === entry.level) || {})
+              .label
+          : undefined
+        return `${name}=${label ?? entry.level}`
+      }
       this.#out.write(
-        `Recorded ${target.nodeId} → ${result.recorded.map((entry) => `${entry.id}=${entry.level}`).join(', ')}` +
+        `已记录 ${target.nodeId} → ${result.recorded.map(describe).join('、')}` +
           `  [${result.eventId}]\n`,
       )
-      this.#out.write(`Your understanding is now part of the history. Ask again to see it used.\n`)
+      this.#out.write(`你的理解现在进入了历史。再问一次就能看到它被使用。\n`)
     } catch (error) {
-      this.#out.write(`Could not record that: ${(error as Error).message}\n`)
+      this.#out.write(`记录失败：${(error as Error).message}\n`)
     }
   }
 
   #printGraph(): void {
     const nodes = this.#session.listNodes()
-    this.#out.write(`\n${nodes.length} node(s):\n`)
+    this.#out.write(`\n共 ${nodes.length} 个节点：\n`)
     for (const node of nodes) {
       const state = this.#session.understandingOf(node.nodeId)
       const understood =
         state.length === 0
           ? ''
-          : `  ← you: ${state.map((entry) => `${entry.id}=${entry.level}`).join(', ')}`
+          : `  ← 你：${state
+              .map((entry) => {
+                const definition = RECORDABLE_DIMENSIONS.find(
+                  (candidate) => candidate.id === entry.id,
+                )
+                const name = definition ? definition.labelZh : entry.id
+                const label = definition
+                  ? (
+                      definition.levelLabelsZh.find(
+                        (candidate) => candidate.level === entry.level,
+                      ) || {}
+                    ).label
+                  : undefined
+                return `${name}=${label ?? entry.level}`
+              })
+              .join('、')}`
       this.#out.write(
-        `  ${node.nodeId.padEnd(28)} ${node.type.padEnd(9)} ${node.label}${understood}\n`,
+        `  ${node.nodeId.padEnd(28)} ${shortKind(node.type).padEnd(6)} ${node.label}${understood}\n`,
       )
     }
     this.#out.write('\n')
@@ -349,10 +374,10 @@ export class LearnCli {
   #printOpenEnds(): void {
     const ends = this.#session.openEnds()
     if (ends.length === 0) {
-      this.#out.write('\nno open lines of inquiry yet — record something and one will appear\n\n')
+      this.#out.write('\n还没有没收尾的线索 —— 记录一条，就会出现\n\n')
       return
     }
-    this.#out.write(`\n${ends.length} open line(s) of inquiry:\n`)
+    this.#out.write(`\n${ends.length} 条还没收尾的线索：\n`)
     for (const end of ends) {
       this.#out.write(`  ${end.eventId}  ${end.label}\n`)
     }
@@ -360,26 +385,36 @@ export class LearnCli {
   }
 
   #printDimensions(): void {
-    this.#out.write('recordable dimensions:\n')
+    this.#out.write('可以记录的维度（id 用英文，显示用中文）：\n')
     for (const dimension of RECORDABLE_DIMENSIONS) {
+      const levels = dimension.levels
+        .map((level) => {
+          const label = dimension.levelLabelsZh.find((candidate) => candidate.level === level)
+          return `${level}${label ? `(${label.label})` : ''}`
+        })
+        .join(' | ')
       this.#out.write(
-        `  ${dimension.id.padEnd(13)} ${dimension.levels.join(' | ').padEnd(30)} ${dimension.description}\n`,
+        `  ${dimension.id.padEnd(13)} ${levels.padEnd(46)} ${dimension.labelZh}\n` +
+          `  ${' '.repeat(13)} ${dimension.descriptionZh}\n`,
       )
     }
     this.#out.write('\n')
   }
 
   #printHelp(): void {
-    this.#out.write('\ncommands:\n')
+    this.#out.write('\n命令：\n')
     for (const command of COMMANDS) {
-      this.#out.write(`  ${`${command.name} ${command.usage}`.trim().padEnd(42)} ${command.help}\n`)
+      this.#out.write(`  ${`${command.name} ${command.usage}`.trim().padEnd(30)} ${command.help}\n`)
     }
-    this.#out.write(
-      '\n  any other line is treated as a question — including one that starts with "why".\n\n',
-    )
-    this.#out.write('  ask -> see what was retrieved -> record -> ask again.\n')
-    this.#out.write('  The difference between the two answers is the system working.\n\n')
+    this.#out.write('\n  其他任何一行都会被当成问题 —— 包括以「为什么」开头的问题。\n\n')
+    this.#out.write('  提问 → 看检索到什么 → 记录理解 → 再问一次。\n')
+    this.#out.write('  两个回答之间的差别，就是这个系统在起作用。\n\n')
   }
+}
+
+/** The node kind in Chinese, for a learner-facing listing. English stays in the data. */
+function shortKind(type: string): string {
+  return { concept: '概念', claim: '论断', question: '问题' }[type] ?? type
 }
 
 /** Splits on the first run of whitespace, so a command never swallows the rest of the line. */
@@ -398,8 +433,8 @@ async function main(): Promise<void> {
 
   process.stdout.write(
     `EPISTEME · Learn\n` +
-      `graph: ${filePath}\n` +
-      `Everything you record is saved. Ask a question to begin; "?" lists commands.\n\n`,
+      `图谱文件：${filePath}\n` +
+      `你记录的一切都会保存。先问一个问题；输入 "?" 查看命令。\n\n`,
   )
 
   const cli = await LearnCli.open(out, { filePath })
@@ -416,7 +451,7 @@ async function main(): Promise<void> {
   }
 
   rl.close()
-  process.stdout.write('\nSaved. Everything you recorded is on disk.\n')
+  process.stdout.write('\n已保存。你记录的所有内容都在磁盘上。\n')
 }
 
 // Only run when invoked directly, so importing this file in a test does not start a prompt. Comparing

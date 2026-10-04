@@ -57,8 +57,9 @@ describe('asking in the learner\u2019s own words', () => {
     // command.
     await cli.handle('why is order hard for attention')
 
-    expect(out.text()).toContain('Why does a transformer need to be told about sequence order?')
-    expect(out.text()).not.toContain('nothing asked yet')
+    // The seeded node's label, which is Chinese with the English term in parentheses.
+    expect(out.text()).toContain('为什么 Transformer 必须被告知序列顺序')
+    expect(out.text()).not.toContain('还没有提过问题')
   })
 
   it('treats an unknown first word as a question, not as an error', async () => {
@@ -66,7 +67,7 @@ describe('asking in the learner\u2019s own words', () => {
     await cli.handle('does attention see the order of tokens')
 
     expect(out.text()).not.toContain('unknown command')
-    expect(out.text()).toContain('retrieved, most relevant first')
+    expect(out.text()).toContain('检索到的内容，按相关度排序')
   })
 
   it('shows why each node was retrieved, in the learner\u2019s terms', async () => {
@@ -75,12 +76,13 @@ describe('asking in the learner\u2019s own words', () => {
     await cli.handle('explain')
 
     const text = out.text()
-    // The explanation names the signal, the arithmetic and what it means.
+    // The explanation names the signal, the arithmetic and what it means. Signal names stay English because
+    // they are identifiers; the reading of them is Chinese.
     expect(text).toContain('semantic')
     expect(text).toContain('graph')
-    expect(text).toContain('close in meaning to your question')
+    expect(text).toContain('和你的问题在含义上相近')
     // And it shows the weights, so the ranking is checkable rather than authoritative.
-    expect(text).toContain('weights:')
+    expect(text).toContain('权重')
     expect(text).toContain('semantic=0.5')
   })
 
@@ -91,9 +93,7 @@ describe('asking in the learner\u2019s own words', () => {
     const cli = await LearnCli.open(out, { filePath })
     for (const word of RESERVED_WORDS) {
       await cli.handle(`${word} something about attention`)
-      expect(out.text(), `"${word}" must be treated as a question`).not.toContain(
-        'nothing asked yet',
-      )
+      expect(out.text(), `"${word}" must be treated as a question`).not.toContain('还没有提过问题')
     }
   })
 })
@@ -154,8 +154,8 @@ describe('recording understanding changes the next answer', () => {
     await cli.handle('record claim confidence low')
 
     const added = out.text().slice(before)
-    expect(added).toContain('be more specific')
-    expect(added).not.toContain('Recorded')
+    expect(added).toContain('请说得更具体')
+    expect(added).not.toContain('已记录')
   })
 
   it('refuses a level a dimension does not have', async () => {
@@ -165,7 +165,7 @@ describe('recording understanding changes the next answer', () => {
 
     await cli.handle('record claim_1 confidence very-high')
 
-    expect(out.text().slice(before)).toContain('is not a level of confidence')
+    expect(out.text().slice(before)).toContain('不是 confidence 的合法取值')
   })
 })
 
@@ -209,6 +209,53 @@ describe('the loop survives closing the surface', () => {
 
     expect(b.answer).toBe(a.answer)
     expect(b.ranked.map((entry) => entry.nodeId)).toEqual(a.ranked.map((entry) => entry.nodeId))
+  })
+})
+
+describe('the answer is in the learner\u2019s language', () => {
+  it('answers in Chinese, not English', async () => {
+    const { cli } = await openCli()
+    const cold = await cli.session.ask('为什么模型必须知道每个词的先后顺序')
+    expect(cold.usedContext).toBe(false)
+    expect(cold.answer).toContain('我们先打下地基')
+
+    await cli.handle('claim 自注意力本身无法表达顺序')
+    await cli.handle('record claim_1 confidence low')
+    const warm = await cli.session.ask('为什么模型必须知道每个词的先后顺序')
+
+    expect(warm.usedContext).toBe(true)
+    // The three branches produce structurally different answers, not reworded ones.
+    expect(warm.answer).toContain('还没有把任何一部分标记为确定')
+    expect(warm.answer).not.toBe(cold.answer)
+
+    await cli.handle('record claim_1 articulation high')
+    const settled = await cli.session.ask('为什么模型必须知道每个词的先后顺序')
+    expect(settled.answer).toContain('既然你已经理解了')
+  })
+
+  it('refuses to build on a position the learner marked as contested', async () => {
+    const { cli } = await openCli()
+    await cli.handle('claim 自注意力本身无法表达顺序')
+    await cli.handle('record claim_1 confidence high')
+    await cli.handle('record claim_1 conflict open')
+
+    const answer = await cli.session.ask('为什么模型必须知道每个词的先后顺序')
+
+    // This branch is the reason the cognitive signal exists: an unresolved conflict has to change what the
+    // system is willing to do, not merely what it says.
+    expect(answer.answer).toContain('还没解决的冲突')
+    expect(answer.answer).toContain('不会把它当成已经确定的结论')
+  })
+
+  it('reports retrieval reasons in Chinese as well', async () => {
+    const { cli } = await openCli()
+    const result = await cli.session.ask('为什么模型必须知道每个词的先后顺序')
+
+    const reason = result.ranked[0]?.reasons.find((entry) => entry.signal === 'semantic')
+    expect(reason?.explanationZh).toContain('和你的问题在含义上相近')
+    expect(reason?.labelZh).toBe('语义')
+    // English stays available for the docs, tests and CLI output.
+    expect(reason?.explanation).toContain('close in meaning')
   })
 })
 
