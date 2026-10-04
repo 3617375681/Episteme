@@ -482,7 +482,22 @@ function splitFirst(line: string): [string, ...string[]] {
 
 /** The readline loop. The only part of this file that needs a terminal. */
 async function main(): Promise<void> {
-  const filePath = process.env.EPISTEME_FILE ?? DEFAULT_PATH
+  const argv = process.argv.slice(2)
+
+  if (argv.includes('--help') || argv.includes('-h')) {
+    process.stdout.write(
+      `EPISTEME · Learn —— 一个最小的学习界面\n` +
+        `\n  用法：pnpm learn [选项]\n` +
+        `\n  选项：\n` +
+        `    -f, --file <路径>   指定图谱文件（默认 ${DEFAULT_PATH}）\n` +
+        `    -h, --help          显示这份说明\n` +
+        `\n  环境变量：EPISTEME_FILE 与 --file 等效，--file 优先。\n` +
+        `\n  在里面输入 "?" 查看会话中的命令。任何其他一行都会被当成问题。\n\n`,
+    )
+    return
+  }
+
+  const filePath = optionValue(argv, '--file', '-f') ?? process.env.EPISTEME_FILE ?? DEFAULT_PATH
   const out: CliOutput = { write: (text) => process.stdout.write(text) }
 
   process.stdout.write(
@@ -506,6 +521,33 @@ async function main(): Promise<void> {
 
   rl.close()
   process.stdout.write('\n已保存。你记录的所有内容都在磁盘上。\n')
+}
+
+/**
+ * Reads a flag's value, accepting both `--file path` and `--file=path`.
+ *
+ * Both spellings because which one works is a coin flip in most tools, and a learner who guesses wrong
+ * would silently get the default file — writing their understanding somewhere they did not intend.
+ */
+export function optionValue(
+  argv: readonly string[],
+  ...names: readonly string[]
+): string | undefined {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (argument === undefined) continue
+    for (const name of names) {
+      if (argument === name) {
+        const next = argv[index + 1]
+        if (next !== undefined && !next.startsWith('-')) return next
+      }
+      if (argument.startsWith(`${name}=`)) {
+        const value = argument.slice(name.length + 1)
+        if (value !== '') return value
+      }
+    }
+  }
+  return undefined
 }
 
 // Only run when invoked directly, so importing this file in a test does not start a prompt. Comparing

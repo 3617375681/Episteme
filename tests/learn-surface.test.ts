@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LearnCli, RESERVED_WORDS } from '@episteme/app-learn'
+import { LearnCli, RESERVED_WORDS, optionValue } from '@episteme/app-learn'
 import { LearnSession } from '@episteme/app-learn/session'
 import { seedTopic } from '@episteme/app-learn/seed'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -256,6 +256,30 @@ describe('the answer is in the learner\u2019s language', () => {
     expect(reason?.labelZh).toBe('语义')
     // English stays available for the docs, tests and CLI output.
     expect(reason?.explanation).toContain('close in meaning')
+  })
+})
+
+describe('command-line options', () => {
+  it('accepts both the separated and the joined spelling of a flag', () => {
+    // Both, because which one works is a coin flip in most tools, and a learner who guessed wrong would
+    // silently get the default graph file — recording their understanding somewhere they did not intend.
+    expect(optionValue(['--file', '/tmp/a.jsonl'], '--file', '-f')).toBe('/tmp/a.jsonl')
+    expect(optionValue(['--file=/tmp/a.jsonl'], '--file', '-f')).toBe('/tmp/a.jsonl')
+    expect(optionValue(['-f', '/tmp/a.jsonl'], '--file', '-f')).toBe('/tmp/a.jsonl')
+    expect(optionValue(['-f=/tmp/a.jsonl'], '--file', '-f')).toBe('/tmp/a.jsonl')
+  })
+
+  it('returns nothing rather than a flag when the value is missing', () => {
+    // `--file` followed by another flag is a mistake; treating the flag itself as a path would create a
+    // file literally named `--port`.
+    expect(optionValue(['--file', '--port'], '--file', '-f')).toBeUndefined()
+    expect(optionValue(['--file='], '--file', '-f')).toBeUndefined()
+    expect(optionValue([], '--file', '-f')).toBeUndefined()
+    expect(optionValue(['--other', 'x'], '--file', '-f')).toBeUndefined()
+  })
+
+  it('takes the first occurrence when a flag is repeated', () => {
+    expect(optionValue(['--file', 'a', '--file', 'b'], '--file')).toBe('a')
   })
 })
 
